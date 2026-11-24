@@ -127,13 +127,21 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
 .zmsg{font-size:13px;color:var(--mute);margin:6px 2px 0}
 body.simple .adv{display:none!important}
 .mode{font:inherit;font-size:14px;font-weight:600;min-height:38px;padding:6px 12px;border-radius:99px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+#dimmer{position:fixed;inset:0;z-index:90;background:#000;display:flex;align-items:flex-end;justify-content:center;padding-bottom:max(40px,env(safe-area-inset-bottom))}
+#dimmer[hidden]{display:none}
+#dimmer .dd{color:#3d5a45;font-size:14px;display:flex;gap:10px;align-items:center}
+#dimmer i{width:10px;height:10px;border-radius:50%;background:#1f7a3f;animation:blink 2.5s ease-in-out infinite}
+@keyframes blink{50%{opacity:.25}}
+.mode.on{background:#16222a;color:#9fe3b5;border-color:#1f7a3f}
 .note{font-size:13px;color:var(--mute);padding:0 max(3vw,14px) max(24px,env(safe-area-inset-bottom));max-width:1100px}
 </style>
 </head>
 <body>
+<div id="dimmer" hidden><div class="dd"><i></i><span id="dimTxt">Đang theo dõi · chạm để xem</span></div></div>
 <header>
   <h1>Giám sát giường ICU</h1>
   <span class="pill" id="pill">Chưa có giường nào đang giám sát</span>
+  <button class="mode" id="btnDim">Màn hình tối: Tắt</button>
   <button class="mode" id="btnMode">Nâng cao</button>
 </header>
 
@@ -157,6 +165,7 @@ body.simple .adv{display:none!important}
       <label class="chk"><input type="checkbox" data-b="rec">Tự lưu clip khi cảnh báo</label>
       <label class="chk"><input type="checkbox" data-b="night">Tăng cường hình ban đêm</label>
       <label class="chk"><input type="checkbox" data-b="handRing">Chỉ báo khi thấy tay đi vào vùng mặt</label>
+      <label class="chk"><input type="checkbox" data-b="exitOn">Báo ngồi dậy / rời giường</label>
       <label class="chk"><input type="checkbox" data-b="autoZone">Tự nhận diện vùng khi bật camera</label>
       <label class="chk"><input type="checkbox" data-b="autoNight">Tự đổi ngưỡng ban đêm</label>
     </div>
@@ -165,7 +174,7 @@ body.simple .adv{display:none!important}
         <span class="lbl" id="fileLbl">Chấm video</span>
         <span class="lbl">Tốc độ</span>
         <select id="speed"><option>1</option><option>2</option><option>4</option><option>8</option></select>
-        <select id="mkType" aria-label="Loại sự kiện thật"><option value="face">Tay hướng về mặt / ống</option><option value="hand">Tay đặt yên trên mặt / ống</option><option value="head">Thay đổi tư thế đầu</option><option value="still">Bất động kéo dài</option><option value="cam">Sự cố camera</option></select>
+        <select id="mkType" aria-label="Loại sự kiện thật"><option value="face">Tay hướng về mặt / ống</option><option value="hand">Tay đặt yên trên mặt / ống</option><option value="head">Thay đổi tư thế đầu</option><option value="still">Bất động kéo dài</option><option value="exit">Ngồi dậy / rời giường</option><option value="cam">Sự cố camera</option></select>
         <button class="pri" id="btnMark">Đánh dấu (phím M)</button>
         <button id="btnUndo">Xoá dấu cuối</button>
       </div>
@@ -279,7 +288,7 @@ const GRP={def:'Mặc định',sed:'An thần sâu',awake:'Tỉnh / cai máy'};
 const PROF0={sed:{faceThr:4,faceActive:0.6,faceCd:2,headThr:15,stillMin:120},awake:{faceThr:7,faceActive:2,faceCd:5,headThr:20,stillMin:180}};
 const DEF={ver:4,diffThr:25,faceThr:5,faceWin:10,faceActive:0.8,faceCd:2,posThr:10,headThr:15,stillMin:120,lightThr:40,
   careMin:15,repeatMin:2,vol:70,staffThr:3,tolSec:30,keepDays:7,
-  autoZone:true,simple:true,occThr:8,occSec:2,handMin:4,handRing:true,ringThr:0.8,ringPres:3,ringWin:3,gmMax:12,faceRatio:1.5,headMoveThr:8,
+  autoZone:true,simple:true,exitOn:true,dimOn:false,occThr:8,occSec:2,handMin:4,handRing:true,ringThr:0.8,ringPres:3,ringWin:3,gmMax:12,faceRatio:1.5,headMoveThr:8,
   showMask:true,blur:false,sound:true,rec:true,night:true,autoStaff:true,autoNight:true,nightFrom:22,nightTo:6,nightDiff:30,nightFace:8,n:1,speed:4};
 let S;
 try{S=Object.assign({},DEF,JSON.parse(localStorage.getItem('icuMon2')||'{}'))}catch(e){S=Object.assign({},DEF)}
@@ -323,12 +332,14 @@ const RULES={
       :['Kiểm tra tư thế đầu, đầu giường theo chỉ định.','Nếu bệnh nhân có EVD: kiểm tra lại mức chuẩn.']},
   hand:{name:'Tay đặt trên mặt/ống',lvl:'hi',cd:B=>P(B,'faceCd'),t:'Nguy cơ tự rút nội khí quản – tay đang đặt trên mặt/ống',
     tips:()=>['Kiểm tra ngay ống nội khí quản: vị trí (vạch cm tại cung răng), cố định, bóng chèn.','Đánh giá RASS và CPOT; cân nhắc an thần – giảm đau, cố định tay theo quy trình.','Nếu không phải tay (khăn, gối, đầu xoay): bấm “Cảnh báo sai” để app học lại hình mặt.']},
+  exit:{name:'Ngồi dậy / rời giường',lvl:'hi',cd:()=>2,t:'Bệnh nhân có thể đang ngồi dậy',
+    tips:()=>['Đến giường ngay: kiểm tra bệnh nhân, ống NKQ, EVD và các đường truyền.','Đánh giá tri giác, sảng (CAM-ICU), RASS; áp dụng biện pháp phòng té ngã.','Nếu bệnh nhân chỉ đổi tư thế: bấm “Cảnh báo sai” để app lấy vị trí mới làm mốc.']},
   cam:{name:'Sự cố camera',lvl:'hi',cd:()=>5,t:'Sự cố camera',
     tips:()=>['Kiểm tra camera, giá đỡ, nguồn sạc và kết nối.','Theo dõi trực tiếp cho đến khi camera hoạt động lại.']},
   light:{name:'Ánh sáng yếu',lvl:'lo',cd:()=>10,t:'Ánh sáng yếu – độ tin cậy phát hiện thấp',
     tips:()=>['Bổ sung đèn hồng ngoại hoặc đèn chiếu gián tiếp.','Không dựa vào cảnh báo tự động trong khoảng này.']}
 };
-const TYPES=['face','hand','head','still','cam'];
+const TYPES=['face','hand','exit','head','still','cam'];
 
 let beds=[],loopT=null,raf=0,log=[],sessions=[],seq=0,activeMs=0,actx=null,dir=null,pendingDir=null;
 try{log=JSON.parse(localStorage.getItem('icuLog')||'[]');sessions=JSON.parse(localStorage.getItem('icuSess')||'[]');
@@ -435,7 +446,7 @@ function makeBed(i){
     else{B.careUntil=clk(B)+S.careMin*60000;info(B,'Bắt đầu chăm sóc – tạm dừng cảnh báo '+S.careMin+' phút','care')}
     updCare(B);
   });
-  q('.turn').addEventListener('click',()=>{if(!B.running)return;B.lastPos=clk(B);resetRefs(B);info(B,'Điều dưỡng xác nhận đã xoay trở','turn');renderReview()});
+  q('.turn').addEventListener('click',()=>{if(!B.running)return;B.lastPos=clk(B);setRest(B);resetRefs(B);info(B,'Điều dưỡng xác nhận đã xoay trở','turn');renderReview()});
   q('.bauto').addEventListener('click',()=>{if(B.running)autoZones(B,true)});
   q('.bref').addEventListener('click',()=>{if(!B.running)return;resetRefs(B);info(B,'Đặt lại mốc so sánh thủ công')});
   q('.bsave').addEventListener('click',()=>{
@@ -448,7 +459,7 @@ function makeBed(i){
   ov.addEventListener('pointerdown',e=>{if(!B.running)return;const p=pt(e);B.drag={k:document.querySelector('input[name=zone]:checked').value,p0:p,z:{x:p.x,y:p.y,w:0,h:0}};ov.setPointerCapture(e.pointerId)});
   ov.addEventListener('pointermove',e=>{if(!B.drag)return;const p=pt(e),a=B.drag.p0;B.drag.z={x:Math.min(a.x,p.x),y:Math.min(a.y,p.y),w:Math.abs(p.x-a.x),h:Math.abs(p.y-a.y)}});
   ov.addEventListener('pointerup',()=>{if(!B.drag)return;const d=B.drag;B.drag=null;
-    if(d.z.w>.03&&d.z.h>.03){c.zones[d.k]=d.z;if(d.k==='face'){B.zoneOk=true;const fw=d.z.w/1.3,fh=d.z.h/1.22,f={x:d.z.x+.15*fw,y:d.z.y+.12*fh,w:fw,h:fh};c.zones.head=zonesFrom(f).head;c.zones.ftight=f}save();resetRefs(B);info(B,'Đã cập nhật vùng '+ZN[d.k]+(d.k==='face'?' (vùng đầu tự chỉnh theo)':''))}});
+    if(d.z.w>.03&&d.z.h>.03){c.zones[d.k]=d.z;if(d.k==='face'){B.zoneOk=true;setTimeout(()=>setRest(B),0);const fw=d.z.w/1.3,fh=d.z.h/1.22,f={x:d.z.x+.15*fw,y:d.z.y+.12*fh,w:fw,h:fh};c.zones.head=zonesFrom(f).head;c.zones.ftight=f}save();resetRefs(B);info(B,'Đã cập nhật vùng '+ZN[d.k]+(d.k==='face'?' (vùng đầu tự chỉnh theo)':''))}});
   bindVid(B);
   updCare(B);
   return B;
@@ -523,19 +534,32 @@ async function autoZones(B,manual,tries){
   if(got.length<3){if(!manual&&tries<3&&B.running){zmsg(B,'Chưa thấy rõ mặt bệnh nhân – sẽ thử lại sau 10 giây…');setTimeout(()=>autoZones(B,false,tries+1),10000);return}zmsg(B,'Không tự tìm được mặt bệnh nhân (thiếu sáng, che mặt hoặc góc quay). App CHƯA theo dõi tay cho đến khi anh/chị kéo trên hình để vẽ khung Mặt, hoặc bấm “Tự nhận diện vùng” để thử lại.');return}
   const med=k=>{const a=got.map(g=>g[k]).sort((p,q)=>p-q);return a[a.length>>1]};
   const f={x:med('x'),y:med('y'),w:med('w'),h:med('h')},z=zonesFrom(f);
-  B.c.zones=z;save();resetRefs(B);B.lastPos=clk(B);B.faceRef=f;B.zoneOk=true;
+  B.c.zones=z;save();resetRefs(B);B.lastPos=clk(B);B.faceRef=f;B.zoneOk=true;setRest(B);
   zmsg(B,'Đã tự nhận diện vùng. Nếu khung đỏ chưa ôm đúng mặt, kéo trên hình để chỉnh lại.');
   info(B,(manual?'Tự nhận diện lại vùng':'Tự nhận diện vùng khi bật camera')+' – mặt tại '+Math.round((f.x+f.w/2)*100)+'%, '+Math.round((f.y+f.h/2)*100)+'%','zone');
   setTimeout(()=>{const m=B.q('.zmsg');if(m.textContent.startsWith('Đã tự'))zmsg(B,'')},12000);
 }
 function trackFace(B){
-  const t=B.c.zones.ftight;if(!t)return;const f=findFace(B);if(!f)return;
+  const t=B.c.zones.ftight;if(!t)return;const f=findFace(B);if(!f)return;B.lastF=f;B.lastFT=clk(B);
   const r=(f.w*f.h)/(t.w*t.h),sz=Math.max(t.w,t.h),d=Math.hypot(f.x+f.w/2-t.x-t.w/2,f.y+f.h/2-t.y-t.h/2);
   if(r<.5||r>2||d>sz*2||d<sz*.06)return;
   const a=.6,n={x:t.x+(f.x-t.x)*a,y:t.y+(f.y-t.y)*a,w:t.w+(f.w-t.w)*a,h:t.h+(f.h-t.h)*a},z=zonesFrom(n);
   B.c.zones.face=z.face;B.c.zones.head=z.head;B.c.zones.ftight=z.ftight;B.headMovT=clk(B);
   if(d>sz*.2){B.rebase=true;B.faceHist=[]}
   if(Date.now()-(B.saveT||0)>5000){B.saveT=Date.now();save()}
+}
+function setRest(B){const t=B.c.zones.ftight;B.rest=t?{x:t.x,y:t.y,w:t.w,h:t.h}:null;B.exN={sit:0,edge:0,empty:0}}
+function exitCheck(B,now,bedDiff){
+  if(!S.exitOn||!B.rest)return;const r=B.rest,bd=B.c.zones.bed,t=B.c.zones.ftight,n=B.exN||(B.exN={sit:0,edge:0,empty:0});
+  const f=B.lastF&&now-(B.lastFT||-1e15)<1500?B.lastF:null,seen=!!f||(now-(B.lastFT||-1e15)<1500);
+  let sit=false,edge=false;
+  for(const q of [t,f]){if(!q)continue;const cx=q.x+q.w/2,cy=q.y+q.h/2,sc=(q.w*q.h)/(r.w*r.h),d=Math.hypot(cx-r.x-r.w/2,cy-r.y-r.h/2)/Math.max(r.w,r.h);
+    if(sc>1.6||d>1.2)sit=true;
+    const m=.03;if(cx<bd.x+m||cx>bd.x+bd.w-m||cy<bd.y-m||cy>bd.y+bd.h-m)edge=true}
+  n.sit=sit?n.sit+1:0;n.edge=edge?n.edge+1:0;n.empty=!seen&&bedDiff>15&&Date.now()-(B.trackT||0)<1500?n.empty+1:0;
+  if(n.edge>=3){fire(B,'exit','Bệnh nhân ra sát / qua mép giường');n.edge=0}
+  else if(n.sit>=3){fire(B,'exit','Bệnh nhân có thể đang ngồi dậy');n.sit=0}
+  if(n.empty>=20){fire(B,'exit','Không thấy bệnh nhân trên giường');n.empty=0}
 }
 function relocFace(B){
   const o=B.c.zones.face,f=findFace(B);if(!f)return;
@@ -647,6 +671,7 @@ function tickBed(B){
   }
   if(B.relocAt&&now>=B.relocAt){B.relocAt=0;relocFace(B)}
   if(B.zoneOk&&S.autoZone&&!B.handHits&&!B.occSince&&!caring&&Date.now()-(B.trackT||0)>1000){B.trackT=Date.now();trackFace(B)}
+  if(B.zoneOk&&!caring&&!warm&&now-(B.exitT||-1e15)>1000){B.exitT=now;exitCheck(B,now,B.base?fracDiff(B,g,B.base,z.bed,dT):0)}
   // tay đặt yên trên mặt: vùng mặt bị che so với hình mặt bình thường + có cánh tay trên đường lên mặt
   if(B.rebase){B.rebase=false;B.base=g;B.baseSkin=skn;B.baseMean=mean;B.occSince=0}
   let occ=0,rb=0;
@@ -939,7 +964,7 @@ async function play(id){
 }
 document.addEventListener('click',ev=>{
   const b=ev.target.closest('button[data-v]');
-  if(b){const e=log.find(x=>x.id===+b.dataset.id);if(e){e.v=e.v===b.dataset.v?'':b.dataset.v;{const BB=beds.find(x=>x.sess&&x.sess.id===e.sess);if(BB&&e.v){if(e.type==='hand'&&e.v==='fp')BB.rebase=true;const ks=e.type==='face'||e.type==='hand'?['face','hand']:[e.type];for(const k of ks)if(BB.lastAlert[k]!=null)BB.lastAlert[k]=clk(BB)-RULES[k].cd(BB)*60000+5000;if(ks.length>1){BB.faceHist=[];BB.occSince=0}}}saveLog();renderAlerts();renderStats();renderReview();
+  if(b){const e=log.find(x=>x.id===+b.dataset.id);if(e){e.v=e.v===b.dataset.v?'':b.dataset.v;{const BB=beds.find(x=>x.sess&&x.sess.id===e.sess);if(BB&&e.v){if(e.type==='hand'&&e.v==='fp')BB.rebase=true;if(e.type==='exit'&&e.v==='fp')setRest(BB);const ks=e.type==='face'||e.type==='hand'?['face','hand']:[e.type];for(const k of ks)if(BB.lastAlert[k]!=null)BB.lastAlert[k]=clk(BB)-RULES[k].cd(BB)*60000+5000;if(ks.length>1){BB.faceHist=[];BB.occSince=0}}}saveLog();renderAlerts();renderStats();renderReview();
     const B=beds.find(x=>x.sess&&x.sess.id===e.sess);if(B){B.alarmT=0;B.el.classList.remove('alarm')}}return}
   const p=ev.target.closest('button[data-play]');if(p)play(+p.dataset.play);
   const sv=ev.target.closest('button[data-save]');if(sv)saveClips(+sv.dataset.save);
@@ -1047,7 +1072,7 @@ function drawBed(B){
   }
   o.setLineDash([]);o.restore();
 }
-function draw(){for(const B of beds)drawBed(B);raf=beds.some(b=>b.running)?requestAnimationFrame(draw):0}
+function draw(){if($('dimmer').hidden)for(const B of beds)drawBed(B);raf=beds.some(b=>b.running)?requestAnimationFrame(draw):0}
 
 /* ---------- cài đặt ---------- */
 document.querySelectorAll('[data-b]').forEach(c=>{
@@ -1190,6 +1215,19 @@ function applyMode(){document.body.classList.toggle('simple',!!S.simple);$('btnM
   if(S.simple){const r=document.querySelector('input[name=zone][value=face]');if(r)r.checked=true}}
 $('btnMode').addEventListener('click',()=>{S.simple=!S.simple;save();applyMode()});
 applyMode();
+
+/* ---------- màn hình tối ---------- */
+let lastTouch=Date.now();
+for(const ev of ['pointerdown','keydown','scroll'])addEventListener(ev,()=>{lastTouch=Date.now();if(!$('dimmer').hidden)$('dimmer').hidden=true},{passive:true,capture:true});
+function anyPending(){const ss=liveSess();for(let i=log.length-1;i>=0&&i>log.length-300;i--){const e=log[i];if(ss.has(e.sess)&&e.kind==='alert'&&!e.v&&e.vt==null&&RULES[e.type].lvl!=='lo')return true}return false}
+function dimTick(){
+  const run=beds.filter(b=>b.running&&b.mode==='cam'),on=S.dimOn&&run.length>0&&!anyPending()&&Date.now()-lastTouch>30000;
+  $('dimmer').hidden=!on;if(on)$('dimTxt').textContent='Đang theo dõi '+run.length+' giường · chạm để xem';
+}
+setInterval(dimTick,1000);
+function updDim(){$('btnDim').textContent='Màn hình tối: '+(S.dimOn?'Bật':'Tắt');$('btnDim').classList.toggle('on',!!S.dimOn)}
+$('btnDim').addEventListener('click',()=>{S.dimOn=!S.dimOn;save();updDim();lastTouch=Date.now()});
+updDim();
 
 /* ---------- khởi động ---------- */
 layout();
