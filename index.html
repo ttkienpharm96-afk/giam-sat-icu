@@ -875,7 +875,7 @@ function renderReview(){
   const day=$('rvDate').value,bed=$('rvBed').value;
   const items=log.filter(e=>dayOf(e.t)===day&&(!bed||e.bed===bed)&&(e.kind==='alert'||e.kind==='miss'||e.kind==='score'||(e.clips&&e.clips.length)||e.type==='turn'||e.type==='care')).reverse();
   $('rvList').innerHTML=items.length?items.map(e=>`<div class="rv"><span><span class="t">${tm(e)}</span>${esc(e.title)}</span>
-    <span class="v">${e.kind==='alert'&&e.vt==null?vbtn(e).replace(/^<div class="v">|<\/div>$/g,''):''}${e.clips&&e.clips.length?`<button data-play="${e.id}">Xem clip (${e.clips.length})</button>`:''}</span></div>`).join('')
+    <span class="v">${e.kind==='alert'&&e.vt==null?vbtn(e).replace(/^<div class="v">|<\/div>$/g,''):''}${e.clips&&e.clips.length?`<button data-play="${e.id}">Xem clip (${e.clips.length})</button><button data-save="${e.id}">Lưu clip</button>`:''}</span></div>`).join('')
     :'<p class="empty2">Không có sự kiện trong ngày này.</p>';
   drawChart();
 }
@@ -905,6 +905,19 @@ function paint(){
 }
 const chartRO=new ResizeObserver(paint);chartRO.observe($('fig'));
 let rvUrl='';
+async function clipBlob(c){
+  if(c.where==='dir'){if(!dir)throw new Error('Cần mở lại thư mục lưu (nút phía trên) để lấy clip này.');return readDir('clip/'+c.name)}
+  const r=await idbGet('clips',c.name);if(!r)throw new Error('Clip đã bị xoá theo thời hạn lưu.');return r.blob;
+}
+async function saveClips(id){
+  const e=log.find(x=>x.id===id);if(!e||!e.clips||!e.clips.length)return;
+  try{
+    const files=[];for(const c of e.clips){const b=await clipBlob(c);files.push(new File([b],c.name,{type:b.type||(c.name.endsWith('.mp4')?'video/mp4':'video/webm')}))}
+    if(navigator.canShare&&navigator.canShare({files})){try{await navigator.share({files,title:e.bed+' – '+e.title});$('rvCap').textContent='Đã mở bảng Chia sẻ: chọn “Lưu video” (vào Ảnh) hoặc “Lưu vào Tệp”.'}catch(x){if(x&&x.name!=='AbortError')throw x}return}
+    for(const f of files)await download(f,f.name);
+    $('rvCap').textContent='Đã tải '+files.length+' phần clip về máy.';
+  }catch(err){$('rvCap').textContent=err.message||'Không lưu được clip.'}
+}
 async function play(id){
   const e=log.find(x=>x.id===id);if(!e||!e.clips||!e.clips.length)return;
   const parts=e.clips.slice();let i=0;rvVid.hidden=false;
@@ -924,6 +937,7 @@ document.addEventListener('click',ev=>{
   if(b){const e=log.find(x=>x.id===+b.dataset.id);if(e){e.v=e.v===b.dataset.v?'':b.dataset.v;{const BB=beds.find(x=>x.sess&&x.sess.id===e.sess);if(BB&&e.v){if(e.type==='hand'&&e.v==='fp')BB.rebase=true;const ks=e.type==='face'||e.type==='hand'?['face','hand']:[e.type];for(const k of ks)if(BB.lastAlert[k]!=null)BB.lastAlert[k]=clk(BB)-RULES[k].cd(BB)*60000+5000;if(ks.length>1){BB.faceHist=[];BB.occSince=0}}}saveLog();renderAlerts();renderStats();renderReview();
     const B=beds.find(x=>x.sess&&x.sess.id===e.sess);if(B){B.alarmT=0;B.el.classList.remove('alarm')}}return}
   const p=ev.target.closest('button[data-play]');if(p)play(+p.dataset.play);
+  const sv=ev.target.closest('button[data-save]');if(sv)saveClips(+sv.dataset.save);
 });
 $('rvDate').value=dayOf(Date.now());
 $('rvDate').addEventListener('change',renderReview);
