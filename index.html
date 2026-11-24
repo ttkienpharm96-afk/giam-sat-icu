@@ -399,7 +399,7 @@ const TILE=`<div class="th"><input class="bn" aria-label="Tên giường"><span 
 <p class="zmsg" hidden></p>
 <p class="zmsg diag"></p>
 <div class="mm"><div>Mặt<b data-m="face">–</b></div><div>Cử động người<b data-m="bed">–</b></div><div>Bất động<b data-m="still">–</b></div><div>Độ sáng<b data-m="light">–</b></div></div>
-<div class="row sm"><select class="cs" aria-label="Chọn camera"><option value="">Camera mặc định</option></select><button class="pri bc">Bật camera</button>
+<div class="row sm"><select class="cs" aria-label="Chọn camera"><option value="__user">Camera trước</option><option value="__env">Camera sau</option></select><button class="pri bc">Bật camera</button>
 <label class="btn">Chấm video<input type="file" accept="video/*" hidden></label><button class="bs">Dừng</button><button class="br">● Ghi</button></div>
 <div class="row sm"><button class="care">Đang chăm sóc</button><button class="turn">Đã xoay trở</button><button class="bauto">Tự nhận diện vùng</button><button class="bref">Đặt lại mốc</button><label class="chk"><input type="checkbox" class="evd">Có EVD</label><select class="grp" aria-label="Nhóm ngưỡng">${Object.entries(GRP).map(([k,v])=>`<option value="${k}">Nhóm: ${v}</option>`).join('')}</select></div>
 <details class="sc"><summary>Ghi RASS / CPOT</summary><div class="row sm">
@@ -731,7 +731,7 @@ $('speed').value=String(S.speed);
 $('speed').addEventListener('change',()=>{S.speed=+$('speed').value;save();beds.forEach(b=>{if(b.mode==='file')b.vid.playbackRate=S.speed});restartLoop()});
 
 /* ---------- âm báo ---------- */
-function audio(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume()}catch(e){}return actx}
+function audio(){try{if(navigator.audioSession&&navigator.audioSession.type!=='playback')navigator.audioSession.type='playback';actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume()}catch(e){}return actx}
 document.addEventListener('pointerdown',audio);
 function beep(lvl,loud){
   const a=audio();if(!a)return;
@@ -898,15 +898,15 @@ function pillUpd(){
 async function listCams(){
   try{const ds=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
     for(const B of beds){const sel=B.q('.cs'),v=sel.value||B.c.cam;
-      sel.innerHTML='<option value="">Camera mặc định</option>'+ds.map((d,i)=>`<option value="${esc(d.deviceId)}">${esc(d.label||'Camera '+(i+1))}</option>`).join('');
-      if([...sel.options].some(o=>o.value===v))sel.value=v}}catch(e){}
+      sel.innerHTML='<option value="__user">Camera trước</option><option value="__env">Camera sau</option>'+ds.map((d,i)=>`<option value="${esc(d.deviceId)}">${esc(d.label||'Camera '+(i+1))}</option>`).join('');
+      if([...sel.options].some(o=>o.value===v))sel.value=v;else sel.value='__user'}}catch(e){}
 }
 async function startCam(B){
   audio();stopBed(B);
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){chip(B,'Trình duyệt không cho mở camera','bad');return}
   const id=B.q('.cs').value;B.c.cam=id;save();
   try{
-    B.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:id?{deviceId:{exact:id},width:{ideal:960}}:{width:{ideal:960},facingMode:'environment'}});
+    B.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:id&&id.indexOf('__')!==0?{deviceId:{exact:id},width:{ideal:960}}:{width:{ideal:960},facingMode:id==='__env'?'environment':'user'}});
     B.vid.srcObject=B.stream;B.vid.playbackRate=1;await B.vid.play();listCams();begin(B,'cam','camera');
     B.stream.getVideoTracks()[0].addEventListener('ended',()=>{if(B.mode==='cam'&&B.running){B.lastAlert.cam=null;fire(B,'cam','Mất tín hiệu camera');chip(B,'Mất tín hiệu camera','bad')}});
   }catch(e){chip(B,'Không mở được camera','bad');B.q('.empty').textContent='Không mở được camera ('+e.name+'). Kiểm tra quyền camera, camera có đang dùng ở ô khác không, hoặc mở file qua http://localhost.'}
