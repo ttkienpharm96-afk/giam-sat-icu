@@ -41,7 +41,7 @@ main{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(320px,1fr);gap:16
 .chip.on{color:var(--ok)}.chip.warn{color:var(--mid)}.chip.bad{color:var(--hi)}
 .stage{position:relative;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:4/3}
 .stage video{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:contain}
-.blurv .stage video{filter:blur(10px)}
+.stage video{opacity:.01}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;touch-action:none}
 .empty{position:absolute;inset:0;display:grid;place-items:center;color:#8aa0aa;text-align:center;padding:14px;font-size:14px}
 .mm{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}
@@ -125,6 +125,8 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
 .talert ul{margin:2px 0 8px;padding-left:18px;font-size:14px}
 .talert .v button{min-height:40px;font-size:14px;background:rgba(255,255,255,.95);color:#111;border:0;font-weight:650}
 .zmsg{font-size:13px;color:var(--mute);margin:6px 2px 0}
+body.simple .adv{display:none!important}
+.mode{font:inherit;font-size:14px;font-weight:600;min-height:38px;padding:6px 12px;border-radius:99px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
 .note{font-size:13px;color:var(--mute);padding:0 max(3vw,14px) max(24px,env(safe-area-inset-bottom));max-width:1100px}
 </style>
 </head>
@@ -132,11 +134,12 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
 <header>
   <h1>Giám sát giường ICU</h1>
   <span class="pill" id="pill">Chưa có giường nào đang giám sát</span>
+  <button class="mode" id="btnMode">Nâng cao</button>
 </header>
 
 <main>
 <div class="left">
-  <section class="card">
+  <section class="card adv">
     <div class="row" style="margin-top:0">
       <span class="lbl">Số giường</span>
       <select id="nBeds"><option>1</option><option>2</option><option>3</option><option>4</option></select>
@@ -178,7 +181,7 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
     <div id="alerts"><p class="empty2">Chưa có cảnh báo.</p></div>
   </section>
 
-  <section class="card" id="scoreCard" hidden>
+  <section class="card adv" id="scoreCard" hidden>
     <h2 id="scoreTitle">Kết quả chấm video</h2>
     <div class="kp">
       <div><b id="sSens">–</b><span>Độ nhạy</span></div>
@@ -192,7 +195,7 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
     <p class="lbl" id="sNote"></p>
   </section>
 
-  <section class="card">
+  <section class="card adv">
     <h2>Tìm ngưỡng tối ưu cho cảnh báo vùng mặt</h2>
     <p class="lbl" style="margin:0">Dùng các video đã chấm có dấu “Tay hướng về mặt / ống”. App chạy lại quy tắc với nhiều mức ngưỡng và so với dấu thật.</p>
     <div class="row sm"><span class="lbl">Chấp nhận tối đa</span><input id="optFa" class="num" type="number" min="0" step="0.5" value="1" aria-label="Cảnh báo sai mỗi giờ chấp nhận"><span class="lbl">cảnh báo sai / giờ</span><button class="pri" id="btnOpt">Phân tích</button></div>
@@ -200,7 +203,7 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
     <div id="optOut"></div>
   </section>
 
-  <section class="card">
+  <section class="card adv">
     <h2>Báo cáo cuối ca</h2>
     <div class="row sm">
       <select id="rpCa" aria-label="Chọn ca"><option value="day">Ca ngày 7:00–19:00 hôm nay</option><option value="night">Ca đêm 19:00–7:00 gần nhất</option><option value="12">12 giờ vừa qua</option><option value="custom">Tự chọn khoảng thời gian</option></select>
@@ -211,7 +214,7 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
     <div class="row sm" id="rpAct" hidden><button id="btnRpPrint">In / lưu PDF</button><button id="btnRpCopy">Sao chép văn bản</button><button id="btnRpSave">Tải file HTML</button><span class="lbl" id="rpMsg"></span></div>
   </section>
 
-  <section class="card">
+  <section class="card adv">
     <h2>Đánh giá tại giường (camera trực tiếp)</h2>
     <div class="kp">
       <div><b id="kPPV">–</b><span>Cảnh báo đúng (PPV)</span></div>
@@ -227,7 +230,7 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
     <div id="sugOut"></div>
   </section>
 
-  <section class="card">
+  <section class="card adv">
     <h2>Lưu trữ và xem lại</h2>
     <div class="st" id="stInfo">Đang kiểm tra nơi lưu…</div>
     <div class="row"><button id="btnDir">Chọn thư mục lưu trên máy</button></div>
@@ -248,7 +251,7 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
     <div class="row"><button id="btnClear">Xoá nhật ký</button><span class="lbl" id="clearAsk" hidden>Bấm lần nữa để xác nhận.</span></div>
   </section>
 
-  <section class="card">
+  <section class="card adv">
     <details>
       <summary>Âm báo và ngưỡng phát hiện</summary>
       <div class="row"><button id="btnTest">Thử âm báo</button></div>
@@ -276,7 +279,7 @@ const GRP={def:'Mặc định',sed:'An thần sâu',awake:'Tỉnh / cai máy'};
 const PROF0={sed:{faceThr:4,faceActive:0.6,faceCd:2,headThr:15,stillMin:120},awake:{faceThr:7,faceActive:2,faceCd:5,headThr:20,stillMin:180}};
 const DEF={ver:4,diffThr:25,faceThr:5,faceWin:10,faceActive:0.8,faceCd:2,posThr:10,headThr:15,stillMin:120,lightThr:40,
   careMin:15,repeatMin:2,vol:70,staffThr:3,tolSec:30,keepDays:7,
-  autoZone:true,occThr:8,occSec:2,handMin:4,handRing:true,ringThr:0.8,ringPres:3,ringWin:3,gmMax:12,faceRatio:1.5,headMoveThr:8,
+  autoZone:true,simple:true,occThr:8,occSec:2,handMin:4,handRing:true,ringThr:0.8,ringPres:3,ringWin:3,gmMax:12,faceRatio:1.5,headMoveThr:8,
   showMask:true,blur:false,sound:true,rec:true,night:true,autoStaff:true,autoNight:true,nightFrom:22,nightTo:6,nightDiff:30,nightFace:8,n:1,speed:4};
 let S;
 try{S=Object.assign({},DEF,JSON.parse(localStorage.getItem('icuMon2')||'{}'))}catch(e){S=Object.assign({},DEF)}
@@ -400,11 +403,11 @@ const TILE=`<div class="th"><input class="bn" aria-label="Tên giường"><span 
 <div class="stage"><video playsinline muted></video><canvas></canvas><div class="atxt" hidden></div><div class="empty">Bật camera hoặc mở video để bắt đầu.<br>Kéo chuột trên hình để vẽ vùng.</div></div>
 <p class="zmsg" hidden></p>
 <p class="zmsg diag"></p>
-<div class="mm"><div>Mặt<b data-m="face">–</b></div><div>Cử động người<b data-m="bed">–</b></div><div>Bất động<b data-m="still">–</b></div><div>Độ sáng<b data-m="light">–</b></div></div>
+<div class="mm adv"><div>Mặt<b data-m="face">–</b></div><div>Cử động người<b data-m="bed">–</b></div><div>Bất động<b data-m="still">–</b></div><div>Độ sáng<b data-m="light">–</b></div></div>
 <div class="row sm"><select class="cs" aria-label="Chọn camera"><option value="__user">Camera trước</option><option value="__env">Camera sau</option></select><button class="pri bc">Bật camera</button>
-<label class="btn">Chấm video<input type="file" accept="video/*" hidden></label><button class="bs">Dừng</button><button class="br">● Ghi</button></div>
-<div class="row sm"><button class="care">Đang chăm sóc</button><button class="turn">Đã xoay trở</button><button class="bauto">Tự nhận diện vùng</button><button class="bref">Đặt lại mốc</button><label class="chk"><input type="checkbox" class="evd">Có EVD</label><select class="grp" aria-label="Nhóm ngưỡng">${Object.entries(GRP).map(([k,v])=>`<option value="${k}">Nhóm: ${v}</option>`).join('')}</select></div>
-<details class="sc"><summary>Ghi RASS / CPOT</summary><div class="row sm">
+<label class="btn adv">Chấm video<input type="file" accept="video/*" hidden></label><button class="bs">Dừng</button><button class="br adv">● Ghi</button></div>
+<div class="row sm"><button class="care">Đang chăm sóc</button><button class="turn">Đã xoay trở</button><button class="bauto">Tự nhận diện vùng</button><button class="bref adv">Đặt lại mốc</button><label class="chk"><input type="checkbox" class="evd">Có EVD</label><select class="grp adv" aria-label="Nhóm ngưỡng">${Object.entries(GRP).map(([k,v])=>`<option value="${k}">Nhóm: ${v}</option>`).join('')}</select></div>
+<details class="sc adv"><summary>Ghi RASS / CPOT</summary><div class="row sm">
 <select class="rass" aria-label="RASS"><option value="">RASS</option>${[4,3,2,1,0,-1,-2,-3,-4,-5].map(v=>`<option value="${v}">RASS ${v>0?'+'+v:v}</option>`).join('')}</select>
 <select class="cpot" aria-label="CPOT"><option value="">CPOT</option>${[0,1,2,3,4,5,6,7,8].map(v=>`<option value="${v}">CPOT ${v}</option>`).join('')}</select>
 <button class="bsave">Lưu</button><span class="lbl ok"></span></div></details>`;
@@ -454,6 +457,7 @@ function bindVid(B){
   const v=B.vid;v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('muted','');
   const fit=()=>{if(v.videoWidth&&v.videoHeight)B.q('.stage').style.aspectRatio=v.videoWidth+' / '+v.videoHeight};
   v.addEventListener('loadedmetadata',fit);v.addEventListener('resize',fit);
+  v.addEventListener('pause',()=>{if(B.running&&B.mode==='cam')setTimeout(()=>{if(B.running&&B.vid===v&&v.paused)v.play().catch(()=>{})},50)});
   v.addEventListener('ended',()=>{if(B.mode!=='file')return;B.running=false;saveFeat(B);restartLoop();saveLog();renderScore();chip(B,'Đã chấm xong video','on');updFileRow()});
 }
 function freshVid(B){const nv=document.createElement('video');B.vid.replaceWith(nv);B.vid=nv;bindVid(B)}
@@ -1011,7 +1015,9 @@ async function startFile(B,f){
   try{await B.vid.play();B.vid.playbackRate=S.speed;begin(B,'file',f.name)}catch(err){chip(B,'Không phát được video này','bad')}
 }
 window.addEventListener('beforeunload',ev=>{if(beds.some(b=>b.running&&b.mode==='cam')){beds.forEach(actFlush);ev.preventDefault();ev.returnValue=''}});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&beds.some(b=>b.running))try{navigator.wakeLock&&navigator.wakeLock.request('screen').catch(()=>{})}catch(e){}});
+function wake(){for(const B of beds)if(B.running&&B.mode==='cam'&&B.vid.paused)B.vid.play().catch(()=>{})}
+addEventListener('scroll',()=>{clearTimeout(window.__wk);window.__wk=setTimeout(wake,200)},{passive:true});
+document.addEventListener('visibilitychange',()=>{wake();if(document.visibilityState==='visible'&&beds.some(b=>b.running))try{navigator.wakeLock&&navigator.wakeLock.request('screen').catch(()=>{})}catch(e){}});
 
 /* ---------- vẽ chồng ---------- */
 const ZC={face:'#e5484d',head:'#d98a00',bed:'#35d0e0'},ZN={face:'Mặt / NKQ',head:'Đầu',bed:'Giường'};
@@ -1021,6 +1027,10 @@ function drawBed(B){
   if(ov.width!==cw||ov.height!==ch){ov.width=cw;ov.height=ch}
   o.clearRect(0,0,cw,ch);if(!B.running)return;
   const vr=vrect(B,cw,ch),cW=vr.w,cH=vr.h;o.save();o.translate(vr.x,vr.y);
+  if(B.vid.readyState>=2&&B.vid.videoWidth){
+    if(S.blur){const t=B.bc||(B.bc=document.createElement('canvas'));t.width=24;t.height=Math.max(8,Math.round(24*B.vid.videoHeight/B.vid.videoWidth));t.getContext('2d').drawImage(B.vid,0,0,t.width,t.height);o.imageSmoothingEnabled=true;o.drawImage(t,0,0,cW,cH)}
+    else o.drawImage(B.vid,0,0,cW,cH);
+  }
   if(S.showMask&&B.mask&&B.mask.length===B.W*B.H&&B.mc.width===B.W){
     const im=B.mctx.createImageData(B.W,B.H);
     for(let i=0;i<B.mask.length;i++)if(B.mask[i]){im.data[i*4]=255;im.data[i*4+1]=60;im.data[i*4+2]=60;im.data[i*4+3]=170}
@@ -1174,6 +1184,12 @@ $('btnRpSave').addEventListener('click',()=>download(new Blob(['<!DOCTYPE html><
 
 /* ---------- ứng dụng cài trên màn hình chính ---------- */
 if('serviceWorker' in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+/* ---------- chế độ đơn giản / nâng cao ---------- */
+function applyMode(){document.body.classList.toggle('simple',!!S.simple);$('btnMode').textContent=S.simple?'Nâng cao':'Đơn giản';
+  if(S.simple){const r=document.querySelector('input[name=zone][value=face]');if(r)r.checked=true}}
+$('btnMode').addEventListener('click',()=>{S.simple=!S.simple;save();applyMode()});
+applyMode();
 
 /* ---------- khởi động ---------- */
 layout();
