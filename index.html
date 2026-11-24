@@ -523,6 +523,33 @@ function relocFace(B){
   info(B,'Cập nhật vị trí mặt sau khi bệnh nhân đổi tư thế','zone');
 }
 function newSkin(B,sk,r,ex){if(!B.baseSkin)return 0;const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;const i=y*B.W+x;if(sk[i]&&!B.baseSkin[i])c++}return n?c/n*100:0}
+function findHand(B,sk,face,rr,fp){
+  const W=B.W,H=B.H,bs=B.baseSkin;if(!bs)return null;
+  const[x0,y0,x1,y1]=zr(B,rr),[px0,py0,px1,py1]=zr(B,fp),M=new Uint8Array(W*H);
+  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(x>=px0&&x<px1&&y>=py0&&y<py1)continue;const i=y*W+x;if(sk[i]&&!bs[i])M[i]=1}
+  const E=new Uint8Array(W*H),D=new Uint8Array(W*H);
+  for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x;E[i]=M[i]&M[i-1]&M[i+1]&M[i-W]&M[i+W]}
+  for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x;D[i]=E[i]|E[i-1]|E[i+1]|E[i-W]|E[i+W]}
+  const fx0=face.x*W,fy0=face.y*H,fx1=(face.x+face.w)*W,fy1=(face.y+face.h)*H,fA=Math.max(1,(fx1-fx0)*(fy1-fy0)),fcx=(fx0+fx1)/2,fcy=(fy0+fy1)/2;
+  const lab=new Uint8Array(W*H),st=[];let best=null;
+  for(let i=0;i<W*H;i++){
+    if(!D[i]||lab[i])continue;lab[i]=1;st.push(i);let n=0,sx=0,sy=0,sxx=0,syy=0,sxy=0,bx0=W,by0=H,bx1=0,by1=0,dmin=1e9;
+    while(st.length){const k=st.pop(),x=k%W,y=(k-x)/W;n++;sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;
+      if(x<bx0)bx0=x;if(x>bx1)bx1=x;if(y<by0)by0=y;if(y>by1)by1=y;
+      const dx=Math.max(fx0-x,0,x-fx1),dy=Math.max(fy0-y,0,y-fy1),dd=dx*dx+dy*dy;if(dd<dmin)dmin=dd;
+      for(const q of [k-1,k+1,k-W,k+W])if(q>=0&&q<W*H&&D[q]&&!lab[q]&&Math.abs((q%W)-x)<=1){lab[q]=1;st.push(q)}}
+    if(n<Math.max(12,fA*.04)||n>fA*3)continue;
+    const fill=n/((bx1-bx0+1)*(by1-by0+1));if(fill<.25)continue;
+    if(Math.sqrt(dmin)>(fx1-fx0)*.35)continue;                       // phải sát mặt
+    const mx=sx/n,my=sy/n,cxx=sxx/n-mx*mx,cyy=syy/n-my*my,cxy=sxy/n-mx*my,tr=(cxx+cyy)/2,dt=Math.sqrt(((cxx-cyy)/2)**2+cxy*cxy),l1=tr+dt,l2=Math.max(1e-3,tr-dt),el=Math.sqrt(l1/l2);
+    let ok=false;
+    if(el>=1.6){const th=.5*Math.atan2(2*cxy,cxx-cyy),vx=fcx-mx,vy=fcy-my,vl=Math.hypot(vx,vy)||1;ok=Math.abs(Math.cos(th)*vx/vl+Math.sin(th)*vy/vl)>=.7} // cánh tay hướng về mặt
+    else ok=n>=fA*.08&&n<=fA*.9;                                     // bàn tay gọn
+    if(!ok)continue;
+    const c={pct:n/fA*100,x:bx0/W,y:by0/H,w:(bx1-bx0+1)/W,h:(by1-by0+1)/H,el};if(!best||c.pct>best.pct)best=c;
+  }
+  return best;
+}
 function resetRefs(B){B.lastRing=0;B.occSince=0;B.prev=null;B.faceHist=[];B.lastClock=0}
 function enhance(g,W,H){
   const h=new Uint32Array(256);for(let i=0;i<g.length;i++)h[g[i]]++;
@@ -549,7 +576,7 @@ function tickBed(B){
   const d=B.pctx.getImageData(0,0,W,H).data;let g=new Uint8Array(W*H),sum=0,sq=0;
   const skn=new Uint8Array(W*H);
   for(let i=0,j=0;i<g.length;i++,j+=4){const r=d[j],gg=d[j+1],bb=d[j+2],x=(r*77+gg*150+bb*29)>>8;g[i]=x;sum+=x;sq+=x*x;
-    const Cr=128+.5*r-.4187*gg-.0813*bb,Cb=128-.1687*r-.3313*gg+.5*bb;skn[i]=x>35&&Cr>=135&&Cr<=178&&Cb>=78&&Cb<=128&&r>gg&&r>bb?1:0}
+    const Cr=128+.5*r-.4187*gg-.0813*bb,Cb=128-.1687*r-.3313*gg+.5*bb;const mn=gg<bb?gg:bb,sat=r>0?(r-mn)/r:0,hu=r>mn?(gg-bb)/(r-mn):0;skn[i]=r>60&&r>=gg&&r>bb&&r-gg>=8&&r-bb>=18&&sat>=.13&&sat<=.7&&hu>-.33&&hu<.85&&Cr>=135&&Cr<=176&&Cb>=78&&Cb<=127?1:0}
   const mean=sum/g.length,std=Math.sqrt(Math.max(0,sq/g.length-mean*mean)),covered=mean<10||std<6;
   if(S.night&&!covered&&mean<S.lightThr*2)g=enhance(g,W,H);
   if(!B.prev){B.prev=g;B.ref=g;B.headRef=g;B.base=g;B.baseSkin=skn;B.baseMean=mean;B.occSince=0;B.refMean=mean;B.startT=now;if(!B.lastPos)B.lastPos=now;B.lastMotion=now;B.sameSince=now;return}
@@ -571,7 +598,8 @@ function tickBed(B){
   if(bm>1.5)B.lastMotion=now;
   const gOut=outN>W*H*.05?(mc-bc)/outN*100:bm,gm=bm,[rp,ringPx]=cntExN(B,ringOf(z.face),[z.face,z.head]),hmv=cntEx(B,z.head,[z.face]);
   // bằng chứng có tay: DA MỚI xuất hiện quanh mặt (so với hình lúc bình thường) – cổ/tóc cử động không tính
-  const ringSmall=ringPx<fn*.6,ringR=ringSmall?FULL:ringOf(z.face),fx=z.ftight||z.face,fpad={x:fx.x-fx.w*.12,y:fx.y-fx.h*.12,w:fx.w*1.24,h:fx.h*1.24},nsk=newSkin(B,skn,ringR,[fpad]),rpr=nsk,ringOn=nsk>S.ringPres;
+  let ringSmall=ringPx<fn*.6;const ringR=ringSmall?FULL:ringOf(z.face),fx=z.ftight||z.face,fpad={x:fx.x-fx.w*.12,y:fx.y-fx.h*.12,w:fx.w*1.24,h:fx.h*1.24},hb=B.zoneOk?findHand(B,skn,fx,ringR,fpad):null,nsk=hb?hb.pct:0,rpr=nsk;
+  B.handHits=hb?(B.handHits||0)+1:0;B.handBox=hb;const ringOn=B.handHits>=3;
   if(ringOn)B.lastRing=now;
   const shake=gm>S.gmMax&&gOut>S.gmMax,headMove=hmv>S.headMoveThr&&!ringOn,handOk=!S.handRing||now-(B.lastRing||-1e15)<=S.ringWin*1000;
   const strong=nsk>S.ringPres*2,fTe=strong?fT*.5:fT;
@@ -600,7 +628,7 @@ function tickBed(B){
   if(B.base&&!warm&&!covered&&!shake){
     if(Math.abs(mean-B.baseMean)>20){B.base=g;B.baseSkin=skn;B.baseMean=mean}
     occ=cntDiffEx(B,g,B.base,z.face,[],dT);rb=nsk;
-    const handOn=B.zoneOk&&occ>(strong?S.occThr*.5:S.occThr)&&rb>S.ringPres&&!caring;
+    const handOn=B.zoneOk&&occ>(strong?S.occThr*.5:S.occThr)&&ringOn&&!caring;
     if(handOn){if(!B.occSince)B.occSince=now;else if(now-B.occSince>=S.occSec*1000&&now-(B.lastAlert.face??-1e15)>30000)fire(B,'hand')}
     else{B.occSince=0;if(occ<S.occThr*.4&&now-B.lastMotion>10000&&now-(B.baseT||0)>30000){B.base=g;B.baseSkin=skn;B.baseMean=mean;B.baseT=now}}
   }
@@ -613,7 +641,7 @@ function tickBed(B){
 function meters(B){
   const c=B.cur;if(!c)return;const m=s=>B.q('[data-m='+s+']');
   m('face').textContent=c.act.toFixed(1)+'/'+c.fA+'s';m('bed').textContent=(c.bm<1?'Yên':c.bm<5?'Nhẹ':'Nhiều')+' '+c.bm.toFixed(1)+'%';
-  const dg=B.q('.diag');if(dg&&B.zoneOk&&c.close){dg.textContent='Mặt quá gần camera – app không thấy được tay đi lên nên CHƯA theo dõi tay. Đặt camera xa hơn để thấy cả mặt, vai và ngực.'}else if(dg&&!B.zoneOk){dg.textContent='Chưa xác định được vị trí mặt – chưa theo dõi tay. Kéo trên hình để vẽ khung Mặt, hoặc bấm “Tự nhận diện vùng”.'}else if(dg)dg.textContent='Vùng mặt: '+(c.fm>c.fT?'đang cử động ('+c.fm.toFixed(0)+'%)':'yên')+' · Tay: '+(c.handOk?'có tay gần mặt':'chưa thấy tay')+(c.occ>S.occThr*.5?' · Mặt bị che '+c.occ.toFixed(0)+'%'+(c.occOn?' (đang theo dõi tay đặt yên)':''):'')+(c.act>0?' · Đang đếm '+c.act.toFixed(1)+'/'+c.fA+' giây':'')+(B.why&&B.why!=='tính là cử động tay'?' · Bỏ qua: '+B.why:B.why?' · Đang đếm cử động tay':'');
+  const dg=B.q('.diag');if(dg&&B.zoneOk&&c.close){dg.textContent='Mặt quá gần camera – app không thấy được tay đi lên nên CHƯA theo dõi tay. Đặt camera xa hơn để thấy cả mặt, vai và ngực.'}else if(dg&&!B.zoneOk){dg.textContent='Chưa xác định được vị trí mặt – chưa theo dõi tay. Kéo trên hình để vẽ khung Mặt, hoặc bấm “Tự nhận diện vùng”.'}else if(dg)dg.textContent='Vùng mặt: '+(c.fm>c.fT?'đang cử động ('+c.fm.toFixed(0)+'%)':'yên')+' · Tay: '+((B.handHits>=3?'thấy dạng tay sát mặt (khung xanh)':c.handOk?'vừa thấy tay':'chưa thấy tay'))+(c.occ>S.occThr*.5?' · Mặt bị che '+c.occ.toFixed(0)+'%'+(c.occOn?' (đang theo dõi tay đặt yên)':''):'')+(c.act>0?' · Đang đếm '+c.act.toFixed(1)+'/'+c.fA+' giây':'')+(B.why&&B.why!=='tính là cử động tay'?' · Bỏ qua: '+B.why:B.why?' · Đang đếm cử động tay':'');
   m('still').textContent=Math.floor(c.stillMs/60000)+'ph'+p2(Math.floor(c.stillMs/1000)%60);m('light').textContent=Math.round(c.mean);
   if(c.caring)chip(B,'Đang chăm sóc – còn '+Math.ceil((B.careUntil-clk(B))/60000)+' ph','warn');
   else if(c.staff)chip(B,'Có người cạnh giường – tạm hoãn','warn');
@@ -935,6 +963,7 @@ function drawBed(B){
     B.mctx.putImageData(im,0,0);o.imageSmoothingEnabled=false;o.drawImage(B.mc,0,0,cW,cH);
   }
   o.lineWidth=2*dpr;o.font=(12*dpr)+'px system-ui,sans-serif';
+  if(B.handBox&&B.handHits>=3){const h=B.handBox;o.strokeStyle='#2fbf71';o.lineWidth=3*dpr;o.setLineDash([]);o.strokeRect(h.x*cW,h.y*cH,h.w*cW,h.h*cH);o.fillStyle='#2fbf71';o.fillRect(h.x*cW,h.y*cH-17*dpr,34*dpr,17*dpr);o.fillStyle='#06141a';o.fillText('Tay',h.x*cW+5*dpr,h.y*cH-4.5*dpr);o.lineWidth=2*dpr}
   if(S.handRing){const rr=ringOf(B.c.zones.face);o.strokeStyle='rgba(229,72,77,.55)';o.setLineDash([3*dpr,4*dpr]);o.strokeRect(rr.x*cW,rr.y*cH,rr.w*cW,rr.h*cH)}
   for(const k of ['bed','head','face']){
     const z=B.drag&&B.drag.k===k?B.drag.z:B.c.zones[k];
