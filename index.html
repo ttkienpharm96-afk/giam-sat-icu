@@ -271,14 +271,15 @@ const ZDEF=()=>({face:{x:.38,y:.06,w:.24,h:.26},head:{x:.32,y:.02,w:.36,h:.34},b
 const BDEF=i=>({name:'Giường '+p2(i+1),evd:false,cam:'',grp:'def',zones:ZDEF()});
 const PKEYS=[['faceThr','% cử động vùng mặt'],['faceActive','Giây cử động để báo'],['faceCd','Không nhắc lại (phút)'],['headThr','% đổi tư thế đầu'],['stillMin','Báo bất động sau (phút)']];
 const GRP={def:'Mặc định',sed:'An thần sâu',awake:'Tỉnh / cai máy'};
-const PROF0={sed:{faceThr:4,faceActive:1.2,faceCd:2,headThr:15,stillMin:120},awake:{faceThr:7,faceActive:3,faceCd:5,headThr:20,stillMin:180}};
-const DEF={ver:2,diffThr:25,faceThr:5,faceWin:10,faceActive:1.5,faceCd:2,posThr:10,headThr:15,stillMin:120,lightThr:40,
+const PROF0={sed:{faceThr:4,faceActive:0.6,faceCd:2,headThr:15,stillMin:120},awake:{faceThr:7,faceActive:2,faceCd:5,headThr:20,stillMin:180}};
+const DEF={ver:3,diffThr:25,faceThr:5,faceWin:10,faceActive:0.8,faceCd:2,posThr:10,headThr:15,stillMin:120,lightThr:40,
   careMin:15,repeatMin:2,vol:70,staffThr:3,tolSec:30,keepDays:7,
   autoZone:true,handRing:true,ringThr:0.8,ringPres:3,ringWin:3,gmMax:12,faceRatio:1.5,headMoveThr:8,
   showMask:true,blur:false,sound:true,rec:true,night:true,autoStaff:true,autoNight:true,nightFrom:22,nightTo:6,nightDiff:30,nightFace:8,n:1,speed:4};
 let S;
 try{S=Object.assign({},DEF,JSON.parse(localStorage.getItem('icuMon2')||'{}'))}catch(e){S=Object.assign({},DEF)}
 S.autoStaff=false;
+if(!(S.ver>=3)){Object.assign(S,{ver:3,faceActive:0.8});if(S.prof){S.prof.sed.faceActive=0.6;S.prof.awake.faceActive=2}}
 if(!(S.ver>=2)){Object.assign(S,{ver:2,faceThr:5,faceActive:1.5,faceRatio:1.5});if(S.prof){S.prof.sed.faceActive=1.2;S.prof.awake.faceActive=3;S.prof.awake.faceThr=7}}
 S.prof={sed:Object.assign({},PROF0.sed,(S.prof||{}).sed),awake:Object.assign({},PROF0.awake,(S.prof||{}).awake)};
 S.beds=[0,1,2,3].map(i=>{const b=Object.assign(BDEF(i),(S.beds||[])[i]||{});b.zones=Object.assign(ZDEF(),b.zones||{});return b});
@@ -306,7 +307,7 @@ const SETS=[['vol','Âm lượng cảnh báo (0–100)'],['repeatMin','Nhắc l�
 
 const val=f=>typeof f==='function'?f():f;
 const RULES={
-  face:{name:'Cử động vùng mặt',lvl:'hi',cd:B=>P(B,'faceCd'),t:'Bệnh nhân có cử động tay nhiều về phía mặt',
+  face:{name:'Cử động vùng mặt',lvl:'hi',cd:B=>P(B,'faceCd'),t:'Nguy cơ tự rút nội khí quản – tay đưa lên mặt/miệng',
     tips:()=>['Kiểm tra nguy cơ tự rút nội khí quản, sonde, catheter.','Đánh giá RASS và CPOT; rà soát an thần – giảm đau.','Đánh giá sảng (CAM-ICU) nếu phù hợp.']},
   still:{name:'Bất động kéo dài',lvl:'mid',cd:()=>30,t:B=>'Không ghi nhận thay đổi tư thế trong '+P(B,'stillMin')+' phút',
     tips:()=>['Đánh giá nhu cầu xoay trở và vùng tì đè.','Nếu bất động bất thường: đánh giá mức an thần, tri giác.']},
@@ -434,7 +435,7 @@ function makeBed(i){
       rass:r===''?null:+r,cpot:p===''?null:+p,title:[r!==''?'RASS '+(+r>0?'+'+r:r):'',p!==''?'CPOT '+p:''].filter(Boolean).join(' · '),v:''};
     log.push(e);saveLog();renderAlerts();renderReview();q('.ok').textContent='Đã lưu '+hm(e.t);q('.rass').value='';q('.cpot').value='';
   });
-  const ov=B.ov,pt=e=>{const r=ov.getBoundingClientRect();return{x:Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))}};
+  const ov=B.ov,pt=e=>{const r=ov.getBoundingClientRect(),vr=vrect(B,r.width,r.height);return{x:Math.min(1,Math.max(0,(e.clientX-r.left-vr.x)/vr.w)),y:Math.min(1,Math.max(0,(e.clientY-r.top-vr.y)/vr.h))}};
   ov.addEventListener('pointerdown',e=>{if(!B.running)return;const p=pt(e);B.drag={k:document.querySelector('input[name=zone]:checked').value,p0:p,z:{x:p.x,y:p.y,w:0,h:0}};ov.setPointerCapture(e.pointerId)});
   ov.addEventListener('pointermove',e=>{if(!B.drag)return;const p=pt(e),a=B.drag.p0;B.drag.z={x:Math.min(a.x,p.x),y:Math.min(a.y,p.y),w:Math.abs(p.x-a.x),h:Math.abs(p.y-a.y)}});
   ov.addEventListener('pointerup',()=>{if(!B.drag)return;const d=B.drag;B.drag=null;
@@ -593,7 +594,7 @@ function tickBed(B){
 function meters(B){
   const c=B.cur;if(!c)return;const m=s=>B.q('[data-m='+s+']');
   m('face').textContent=c.act.toFixed(1)+'/'+c.fA+'s';m('bed').textContent=(c.bm<1?'Yên':c.bm<5?'Nhẹ':'Nhiều')+' '+c.bm.toFixed(1)+'%';
-  const dg=B.q('.diag');if(dg)dg.textContent='Vùng mặt: '+(c.fm>c.fT?'đang cử động ('+c.fm.toFixed(0)+'%)':'yên')+' · Tay: '+(c.ringSmall?'không kiểm tra (mặt sát mép hình)':c.handOk?'có tay gần mặt':'chưa thấy tay')+(B.why&&B.why!=='tính là cử động tay'?' · Bỏ qua: '+B.why:B.why?' · Đang đếm cử động tay':'');
+  const dg=B.q('.diag');if(dg)dg.textContent='Vùng mặt: '+(c.fm>c.fT?'đang cử động ('+c.fm.toFixed(0)+'%)':'yên')+' · Tay: '+(c.ringSmall?'không kiểm tra (mặt sát mép hình)':c.handOk?'có tay gần mặt':'chưa thấy tay')+(c.act>0?' · Đang đếm '+c.act.toFixed(1)+'/'+c.fA+' giây':'')+(B.why&&B.why!=='tính là cử động tay'?' · Bỏ qua: '+B.why:B.why?' · Đang đếm cử động tay':'');
   m('still').textContent=Math.floor(c.stillMs/60000)+'ph'+p2(Math.floor(c.stillMs/1000)%60);m('light').textContent=Math.round(c.mean);
   if(c.caring)chip(B,'Đang chăm sóc – còn '+Math.ceil((B.careUntil-clk(B))/60000)+' ph','warn');
   else if(c.staff)chip(B,'Có người cạnh giường – tạm hoãn','warn');
@@ -903,24 +904,26 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 
 /* ---------- vẽ chồng ---------- */
 const ZC={face:'#e5484d',head:'#d98a00',bed:'#35d0e0'},ZN={face:'Mặt / NKQ',head:'Đầu',bed:'Giường'};
+function vrect(B,w,h){const v=B.vid,a=v.videoWidth&&v.videoHeight?v.videoWidth/v.videoHeight:w/h;if(w/h>a){const dw=h*a;return{x:(w-dw)/2,y:0,w:dw,h}}const dh=w/a;return{x:0,y:(h-dh)/2,w,h:dh}}
 function drawBed(B){
   const ov=B.ov,o=B.octx,r=ov.getBoundingClientRect(),dpr=devicePixelRatio||1,cw=Math.round(r.width*dpr),ch=Math.round(r.height*dpr);
   if(ov.width!==cw||ov.height!==ch){ov.width=cw;ov.height=ch}
   o.clearRect(0,0,cw,ch);if(!B.running)return;
+  const vr=vrect(B,cw,ch),cW=vr.w,cH=vr.h;o.save();o.translate(vr.x,vr.y);
   if(S.showMask&&B.mask&&B.mask.length===B.W*B.H&&B.mc.width===B.W){
     const im=B.mctx.createImageData(B.W,B.H);
     for(let i=0;i<B.mask.length;i++)if(B.mask[i]){im.data[i*4]=255;im.data[i*4+1]=60;im.data[i*4+2]=60;im.data[i*4+3]=170}
-    B.mctx.putImageData(im,0,0);o.imageSmoothingEnabled=false;o.drawImage(B.mc,0,0,cw,ch);
+    B.mctx.putImageData(im,0,0);o.imageSmoothingEnabled=false;o.drawImage(B.mc,0,0,cW,cH);
   }
   o.lineWidth=2*dpr;o.font=(12*dpr)+'px system-ui,sans-serif';
-  if(S.handRing){const rr=ringOf(B.c.zones.face);o.strokeStyle='rgba(229,72,77,.55)';o.setLineDash([3*dpr,4*dpr]);o.strokeRect(rr.x*cw,rr.y*ch,rr.w*cw,rr.h*ch)}
+  if(S.handRing){const rr=ringOf(B.c.zones.face);o.strokeStyle='rgba(229,72,77,.55)';o.setLineDash([3*dpr,4*dpr]);o.strokeRect(rr.x*cW,rr.y*cH,rr.w*cW,rr.h*cH)}
   for(const k of ['bed','head','face']){
     const z=B.drag&&B.drag.k===k?B.drag.z:B.c.zones[k];
-    o.strokeStyle=ZC[k];o.setLineDash(k==='bed'?[6*dpr,4*dpr]:[]);o.strokeRect(z.x*cw,z.y*ch,z.w*cw,z.h*ch);
-    const tw=o.measureText(ZN[k]).width+10*dpr;o.fillStyle=ZC[k];o.fillRect(z.x*cw,z.y*ch,tw,17*dpr);
-    o.fillStyle='#06141a';o.fillText(ZN[k],z.x*cw+5*dpr,z.y*ch+12.5*dpr);
+    o.strokeStyle=ZC[k];o.setLineDash(k==='bed'?[6*dpr,4*dpr]:[]);o.strokeRect(z.x*cW,z.y*cH,z.w*cW,z.h*cH);
+    const tw=o.measureText(ZN[k]).width+10*dpr,ly=k==='head'?z.y*cH+z.h*cH-17*dpr:z.y*cH;o.fillStyle=ZC[k];o.fillRect(z.x*cW,ly,tw,17*dpr);
+    o.fillStyle='#06141a';o.fillText(ZN[k],z.x*cW+5*dpr,ly+12.5*dpr);
   }
-  o.setLineDash([]);
+  o.setLineDash([]);o.restore();
 }
 function draw(){for(const B of beds)drawBed(B);raf=beds.some(b=>b.running)?requestAnimationFrame(draw):0}
 
