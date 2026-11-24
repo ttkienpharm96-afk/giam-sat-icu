@@ -223,6 +223,8 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
       <tbody id="tbl"></tbody>
     </table></div>
     <div class="row sm"><span class="lbl">Ghi bỏ sót cho</span><select id="missBed" aria-label="Giường bỏ sót"></select></div>
+    <div class="row sm"><select id="sugGrp" aria-label="Nhóm bệnh nhân"><option value="all">Mọi nhóm</option><option value="def">Nhóm Mặc định</option><option value="sed">Nhóm An thần sâu</option><option value="awake">Nhóm Tỉnh / cai máy</option></select><button class="pri" id="btnSug">Đề xuất ngưỡng từ Đúng/Sai</button></div>
+    <div id="sugOut"></div>
   </section>
 
   <section class="card">
@@ -274,7 +276,7 @@ const GRP={def:'Mặc định',sed:'An thần sâu',awake:'Tỉnh / cai máy'};
 const PROF0={sed:{faceThr:4,faceActive:0.6,faceCd:2,headThr:15,stillMin:120},awake:{faceThr:7,faceActive:2,faceCd:5,headThr:20,stillMin:180}};
 const DEF={ver:4,diffThr:25,faceThr:5,faceWin:10,faceActive:0.8,faceCd:2,posThr:10,headThr:15,stillMin:120,lightThr:40,
   careMin:15,repeatMin:2,vol:70,staffThr:3,tolSec:30,keepDays:7,
-  autoZone:true,occThr:8,occSec:2,handRing:true,ringThr:0.8,ringPres:3,ringWin:3,gmMax:12,faceRatio:1.5,headMoveThr:8,
+  autoZone:true,occThr:8,occSec:2,handMin:4,handRing:true,ringThr:0.8,ringPres:3,ringWin:3,gmMax:12,faceRatio:1.5,headMoveThr:8,
   showMask:true,blur:false,sound:true,rec:true,night:true,autoStaff:true,autoNight:true,nightFrom:22,nightTo:6,nightDiff:30,nightFace:8,n:1,speed:4};
 let S;
 try{S=Object.assign({},DEF,JSON.parse(localStorage.getItem('icuMon2')||'{}'))}catch(e){S=Object.assign({},DEF)}
@@ -298,7 +300,7 @@ function P(B,k){
 const SETS=[['vol','Âm lượng cảnh báo (0–100)'],['repeatMin','Nhắc lại cảnh báo chưa xác nhận sau (phút)'],['careMin','Thời gian tạm dừng khi chăm sóc (phút)'],
   ['ringThr','Tay: % chuyển động ở vùng quanh mặt để tính là có tay'],['ringPres','Tay: % vùng quanh mặt khác với lúc nằm yên để tính là có tay'],['ringWin','Tay: phải thấy tay đi vào trong vòng (giây)'],
   ['gmMax','Bỏ qua khung hình khi cả hình chuyển động trên (%) – rung máy, đổi sáng'],['faceRatio','Vùng mặt phải chuyển động gấp (lần) mức chung của cả hình'],
-  ['occThr','Tay đặt yên: % vùng mặt bị che so với lúc bình thường'],['occSec','Tay đặt yên: số giây bị che liên tục để báo'],
+  ['handMin','Tay: kích thước tối thiểu của khối tay (% diện tích mặt)'],['occThr','Tay đặt yên: % vùng mặt bị che so với lúc bình thường'],['occSec','Tay đặt yên: số giây bị che liên tục để báo'],
   ['headMoveThr','Coi là đầu cử động (không phải tay) khi vùng đầu ngoài mặt chuyển động trên (%)'],
   ['diffThr','Ngưỡng khác biệt điểm ảnh (0–255)'],['faceThr','Vùng mặt: % điểm ảnh chuyển động để tính là “cử động”'],
   ['faceWin','Vùng mặt: cửa sổ xét (giây)'],['faceActive','Vùng mặt: số giây cử động trong cửa sổ để cảnh báo'],
@@ -532,7 +534,7 @@ function relocFace(B){
   info(B,'Cập nhật vị trí mặt sau khi bệnh nhân đổi tư thế','zone');
 }
 function newSkin(B,sk,r,ex){if(!B.baseSkin)return 0;const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;const i=y*B.W+x;if(sk[i]&&!B.baseSkin[i])c++}return n?c/n*100:0}
-function findHand(B,sk,face,rr,fp){
+function findHand(B,sk,face,rr,fp){const hMin=P(B,'handMin')/100;
   const W=B.W,H=B.H,bs=B.baseSkin;if(!bs)return null;
   const[x0,y0,x1,y1]=zr(B,rr),[px0,py0,px1,py1]=zr(B,fp),M=new Uint8Array(W*H);
   for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(x>=px0&&x<px1&&y>=py0&&y<py1)continue;const i=y*W+x;if(sk[i]&&!bs[i])M[i]=1}
@@ -547,7 +549,7 @@ function findHand(B,sk,face,rr,fp){
       if(x<bx0)bx0=x;if(x>bx1)bx1=x;if(y<by0)by0=y;if(y>by1)by1=y;
       const dx=Math.max(fx0-x,0,x-fx1),dy=Math.max(fy0-y,0,y-fy1),dd=dx*dx+dy*dy;if(dd<dmin)dmin=dd;if(dd>dmax)dmax=dd;
       for(const q of [k-1,k+1,k-W,k+W])if(q>=0&&q<W*H&&D[q]&&!lab[q]&&Math.abs((q%W)-x)<=1){lab[q]=1;st.push(q)}}
-    if(n<Math.max(12,fA*.04)||n>fA*3)continue;
+    if(n<Math.max(12,fA*hMin)||n>fA*3)continue;
     const fill=n/((bx1-bx0+1)*(by1-by0+1)),fw=fx1-fx0;
     if(Math.sqrt(dmin)>fw*.35)continue;                       // phải sát mặt
     const mx=sx/n,my=sy/n,cxx=sxx/n-mx*mx,cyy=syy/n-my*my,cxy=sxy/n-mx*my,tr=(cxx+cyy)/2,dt=Math.sqrt(((cxx-cyy)/2)**2+cxy*cxy),l1=tr+dt,l2=Math.max(1e-3,tr-dt),el=Math.sqrt(l1/l2);
@@ -639,10 +641,11 @@ function tickBed(B){
   if(B.base&&!warm&&!covered&&!shake){
     if(Math.abs(mean-B.baseMean)>20){B.base=g;B.baseSkin=skn;B.baseMean=mean}
     occ=cntDiffEx(B,g,B.base,z.face,[],dT);rb=nsk;
-    const handOn=B.zoneOk&&occ>(strong?S.occThr*.5:S.occThr)&&ringOn&&!caring;
+    const oT=P(B,'occThr'),handOn=B.zoneOk&&occ>(strong?oT*.5:oT)&&ringOn&&!caring;
     if(handOn){if(!B.occSince)B.occSince=now;else if(now-B.occSince>=S.occSec*1000&&now-(B.lastAlert.face??-1e15)>30000)fire(B,'hand')}
     else{B.occSince=0;if(occ<S.occThr*.4&&now-B.lastMotion>10000&&now-(B.baseT||0)>30000){B.base=g;B.baseSkin=skn;B.baseMean=mean;B.baseT=now}}
   }
+  (B.pk=B.pk||[]).push([now,fm,nsk,occ]);while(B.pk.length&&B.pk[0][0]<now-3000)B.pk.shift();
   const stillMs=now-B.lastPos;
   if(!caring&&stillMs>P(B,'stillMin')*60000)fire(B,'still');
   if(B.mode==='cam')actAdd(B,bm,faceOn?dt:0);
@@ -689,7 +692,7 @@ function fire(B,type,title){
   const r=RULES[type],now=clk(B);
   if(B.lastAlert[type]!=null&&now-B.lastAlert[type]<r.cd(B)*60000)return;
   B.lastAlert[type]=now;
-  const e={id:++seq,t:Date.now(),vt:B.mode==='file'?now:null,sess:B.sess?B.sess.id:0,bed:B.c.name,kind:'alert',type,title:title||(typeof r.t==='function'?r.t(B):r.t),tips:r.tips(B),v:'',clips:[],rep:0,lb:Date.now()};
+  const pk=B.pk||[],e={id:++seq,t:Date.now(),vt:B.mode==='file'?now:null,sess:B.sess?B.sess.id:0,bed:B.c.name,grp:B.c.grp||'def',f:pk.length?{fm:+Math.max(...pk.map(x=>x[1])).toFixed(1),nsk:+Math.max(...pk.map(x=>x[2])).toFixed(1),occ:+Math.max(...pk.map(x=>x[3])).toFixed(1)}:null,kind:'alert',type,title:title||(typeof r.t==='function'?r.t(B):r.t),tips:r.tips(B),v:'',clips:[],rep:0,lb:Date.now()};
   log.push(e);saveLog();renderAlerts(e.id);renderStats();renderScore();renderReview();
   if(r.lvl!=='lo'){B.el.classList.add('alarm');B.alarmT=Date.now()+15000}
   if(S.sound)beep(r.lvl);
@@ -738,6 +741,34 @@ $('tbl').addEventListener('click',ev=>{
   log.push({id:++seq,t:Date.now(),vt:null,sess:B&&B.sess&&B.mode==='cam'?B.sess.id:0,bed,kind:'miss',type:b.dataset.miss,title:'Bỏ sót: '+RULES[b.dataset.miss].name,v:'fn'});
   saveLog();renderStats();renderReview();
 });
+
+/* ---------- đề xuất ngưỡng từ các lần chọn Đúng/Sai (thống kê, không AI) ---------- */
+const SUG=[['faceThr','fm','% cử động vùng mặt',['face']],['handMin','nsk','Kích thước khối tay (% mặt)',['face','hand']],['occThr','occ','% mặt bị che (tay đặt yên)',['hand']]];
+let sugRes=[];
+function suggest(){
+  const g=$('sugGrp').value,A=log.filter(e=>e.kind==='alert'&&e.vt==null&&e.f&&(e.v==='tp'||e.v==='fp')&&(e.type==='face'||e.type==='hand')&&(g==='all'||(e.grp||'def')===g));
+  const TP=A.filter(e=>e.v==='tp').length,FP=A.length-TP,out=$('sugOut');sugRes=[];
+  if(A.length<10||FP<2){out.innerHTML=`<p class="lbl">Mới có ${A.length} cảnh báo tay/mặt được chọn Đúng/Sai (${TP} đúng, ${FP} sai). Cần ít nhất 10, trong đó ít nhất 2 cảnh báo sai, để đề xuất.</p>`;return}
+  const cur=k=>g!=='all'&&g!=='def'&&S.prof[g]&&S.prof[g][k]!=null?S.prof[g][k]:S[k];
+  for(const[k,f,label,types]of SUG){
+    const X=A.filter(e=>types.includes(e.type)&&e.f[f]!=null);if(!X.length)continue;
+    const tp=X.filter(e=>e.v==='tp'),fp=X.filter(e=>e.v==='fp'),c=cur(k);
+    const cands=[...new Set(X.map(e=>e.f[f]))].filter(v=>v>c).sort((a,b)=>a-b).map(v=>+(v+.1).toFixed(1));
+    let best=null,loose=null;
+    for(const T of cands){const keep=tp.filter(e=>e.f[f]>=T).length,rm=fp.filter(e=>e.f[f]<T).length,lost=tp.length-keep;
+      if(lost===0&&rm>0&&(!best||rm>best.rm))best={k,label,c,T,rm,lost,nfp:fp.length,ntp:tp.length};
+      if(lost>0&&lost<=Math.floor(tp.length*.1)&&rm>0&&(!loose||rm>loose.rm))loose={k,label,c,T,rm,lost,nfp:fp.length,ntp:tp.length}}
+    if(best)sugRes.push(best);if(loose&&(!best||loose.rm>best.rm))sugRes.push(loose);
+  }
+  const ppv=Math.round(TP/A.length*100);
+  out.innerHTML=`<p class="lbl">${A.length} cảnh báo tay/mặt đã chọn: ${TP} đúng, ${FP} sai (PPV ${ppv}%).</p>`+(sugRes.length?`<div class="scroll"><table><thead><tr><th>Ngưỡng</th><th>Hiện tại</th><th>Đề xuất</th><th>Bớt báo sai</th><th>Mất báo đúng</th><th></th></tr></thead><tbody>${sugRes.map((r,i)=>`<tr><td>${esc(r.label)}</td><td>${r.c}</td><td>${r.T}</td><td>${r.rm}/${r.nfp}</td><td>${r.lost}/${r.ntp}</td><td><button data-sug="${i}">Áp dụng</button></td></tr>`).join('')}</tbody></table></div>`
+    :'<p class="lbl">Chưa tìm được ngưỡng nào bớt được cảnh báo sai mà không làm mất cảnh báo đúng. Cảnh báo sai và đúng đang có số đo giống nhau – nên kiểm tra lại vị trí camera hoặc vẽ lại vùng.</p>')
+    +'<p class="lbl" id="sugMsg">Đề xuất chỉ làm app BỚT nhạy để giảm báo sai. Muốn tăng độ nhạy (bớt bỏ sót), hãy chấm video và dùng “Tìm ngưỡng tối ưu”.</p>';
+}
+$('btnSug').addEventListener('click',suggest);
+$('sugOut').addEventListener('click',e=>{const b=e.target.closest('button[data-sug]');if(!b)return;const r=sugRes[+b.dataset.sug],g=$('sugGrp').value;if(!r)return;
+  if(g==='all'||g==='def'){S[r.k]=r.T;const inp=$('s_'+r.k);if(inp)inp.value=r.T}else S.prof[g][r.k]=r.T;
+  save();renderProf();$('sugMsg').textContent='Đã áp dụng: '+r.label+' = '+r.T+(g==='all'||g==='def'?' (ngưỡng chung)':' cho nhóm '+GRP[g])+'.';});
 
 /* ---------- chấm video ---------- */
 const fileBed=()=>beds.find(b=>b.mode==='file'&&b.running)||beds.find(b=>b.mode==='file');
