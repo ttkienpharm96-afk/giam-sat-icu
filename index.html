@@ -515,6 +515,15 @@ async function autoZones(B,manual,tries){
   info(B,(manual?'Tự nhận diện lại vùng':'Tự nhận diện vùng khi bật camera')+' – mặt tại '+Math.round((f.x+f.w/2)*100)+'%, '+Math.round((f.y+f.h/2)*100)+'%','zone');
   setTimeout(()=>{const m=B.q('.zmsg');if(m.textContent.startsWith('Đã tự'))zmsg(B,'')},12000);
 }
+function trackFace(B){
+  const t=B.c.zones.ftight;if(!t)return;const f=findFace(B);if(!f)return;
+  const r=(f.w*f.h)/(t.w*t.h),sz=Math.max(t.w,t.h),d=Math.hypot(f.x+f.w/2-t.x-t.w/2,f.y+f.h/2-t.y-t.h/2);
+  if(r<.5||r>2||d>sz*2||d<sz*.06)return;
+  const a=.6,n={x:t.x+(f.x-t.x)*a,y:t.y+(f.y-t.y)*a,w:t.w+(f.w-t.w)*a,h:t.h+(f.h-t.h)*a},z=zonesFrom(n);
+  B.c.zones.face=z.face;B.c.zones.head=z.head;B.c.zones.ftight=z.ftight;
+  if(d>sz*.2){B.rebase=true;B.faceHist=[]}
+  if(Date.now()-(B.saveT||0)>5000){B.saveT=Date.now();save()}
+}
 function relocFace(B){
   const o=B.c.zones.face,f=findFace(B);if(!f)return;
   const ocx=o.x+o.w/2,ocy=o.y+o.h/2,ncx=f.x+f.w/2,ncy=f.y+f.h/2,r=(f.w*f.h)/(o.w*o.h/1.6);
@@ -533,18 +542,19 @@ function findHand(B,sk,face,rr,fp){
   const fx0=face.x*W,fy0=face.y*H,fx1=(face.x+face.w)*W,fy1=(face.y+face.h)*H,fA=Math.max(1,(fx1-fx0)*(fy1-fy0)),fcx=(fx0+fx1)/2,fcy=(fy0+fy1)/2;
   const lab=new Uint8Array(W*H),st=[];let best=null;
   for(let i=0;i<W*H;i++){
-    if(!D[i]||lab[i])continue;lab[i]=1;st.push(i);let n=0,sx=0,sy=0,sxx=0,syy=0,sxy=0,bx0=W,by0=H,bx1=0,by1=0,dmin=1e9;
+    if(!D[i]||lab[i])continue;lab[i]=1;st.push(i);let n=0,sx=0,sy=0,sxx=0,syy=0,sxy=0,bx0=W,by0=H,bx1=0,by1=0,dmin=1e9,dmax=0;
     while(st.length){const k=st.pop(),x=k%W,y=(k-x)/W;n++;sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;
       if(x<bx0)bx0=x;if(x>bx1)bx1=x;if(y<by0)by0=y;if(y>by1)by1=y;
-      const dx=Math.max(fx0-x,0,x-fx1),dy=Math.max(fy0-y,0,y-fy1),dd=dx*dx+dy*dy;if(dd<dmin)dmin=dd;
+      const dx=Math.max(fx0-x,0,x-fx1),dy=Math.max(fy0-y,0,y-fy1),dd=dx*dx+dy*dy;if(dd<dmin)dmin=dd;if(dd>dmax)dmax=dd;
       for(const q of [k-1,k+1,k-W,k+W])if(q>=0&&q<W*H&&D[q]&&!lab[q]&&Math.abs((q%W)-x)<=1){lab[q]=1;st.push(q)}}
     if(n<Math.max(12,fA*.04)||n>fA*3)continue;
-    const fill=n/((bx1-bx0+1)*(by1-by0+1));if(fill<.25)continue;
-    if(Math.sqrt(dmin)>(fx1-fx0)*.35)continue;                       // phải sát mặt
+    const fill=n/((bx1-bx0+1)*(by1-by0+1)),fw=fx1-fx0;
+    if(Math.sqrt(dmin)>fw*.35)continue;                       // phải sát mặt
     const mx=sx/n,my=sy/n,cxx=sxx/n-mx*mx,cyy=syy/n-my*my,cxy=sxy/n-mx*my,tr=(cxx+cyy)/2,dt=Math.sqrt(((cxx-cyy)/2)**2+cxy*cxy),l1=tr+dt,l2=Math.max(1e-3,tr-dt),el=Math.sqrt(l1/l2);
     let ok=false;
-    if(el>=1.6){const th=.5*Math.atan2(2*cxy,cxx-cyy),vx=fcx-mx,vy=fcy-my,vl=Math.hypot(vx,vy)||1;ok=Math.abs(Math.cos(th)*vx/vl+Math.sin(th)*vy/vl)>=.7} // cánh tay hướng về mặt
-    else ok=n>=fA*.08&&n<=fA*.9;                                     // bàn tay gọn
+    if(el>=1.5){const th=.5*Math.atan2(2*cxy,cxx-cyy),vx=fcx-mx,vy=fcy-my,vl=Math.hypot(vx,vy)||1,dot=Math.abs(Math.cos(th)*vx/vl+Math.sin(th)*vy/vl);
+      ok=Math.sqrt(dmax)>=fw*.45&&(dot>=.4||Math.sqrt(dmin)<fw*.08)}   // cánh tay: một đầu chạm mặt, đầu kia xa mặt – nghiêng bao nhiêu cũng được; dải da ôm sát viền mặt bị loại
+    else ok=fill>=.3&&n>=fA*.06&&n<=fA*.9;                            // bàn tay gọn
     if(!ok)continue;
     const c={pct:n/fA*100,x:bx0/W,y:by0/H,w:(bx1-bx0+1)/W,h:(by1-by0+1)/H,el};if(!best||c.pct>best.pct)best=c;
   }
@@ -622,6 +632,7 @@ function tickBed(B){
     }
   }
   if(B.relocAt&&now>=B.relocAt){B.relocAt=0;relocFace(B)}
+  if(B.zoneOk&&S.autoZone&&!B.handHits&&!B.occSince&&!caring&&Date.now()-(B.trackT||0)>1000){B.trackT=Date.now();trackFace(B)}
   // tay đặt yên trên mặt: vùng mặt bị che so với hình mặt bình thường + có cánh tay trên đường lên mặt
   if(B.rebase){B.rebase=false;B.base=g;B.baseSkin=skn;B.baseMean=mean;B.occSince=0}
   let occ=0,rb=0;
@@ -872,7 +883,7 @@ async function play(id){
 }
 document.addEventListener('click',ev=>{
   const b=ev.target.closest('button[data-v]');
-  if(b){const e=log.find(x=>x.id===+b.dataset.id);if(e){e.v=e.v===b.dataset.v?'':b.dataset.v;if(e.type==='hand'&&e.v==='fp'){const BB=beds.find(x=>x.sess&&x.sess.id===e.sess);if(BB)BB.rebase=true}saveLog();renderAlerts();renderStats();renderReview();
+  if(b){const e=log.find(x=>x.id===+b.dataset.id);if(e){e.v=e.v===b.dataset.v?'':b.dataset.v;{const BB=beds.find(x=>x.sess&&x.sess.id===e.sess);if(BB&&e.v){if(e.type==='hand'&&e.v==='fp')BB.rebase=true;const ks=e.type==='face'||e.type==='hand'?['face','hand']:[e.type];for(const k of ks)if(BB.lastAlert[k]!=null)BB.lastAlert[k]=clk(BB)-RULES[k].cd(BB)*60000+5000;if(ks.length>1){BB.faceHist=[];BB.occSince=0}}}saveLog();renderAlerts();renderStats();renderReview();
     const B=beds.find(x=>x.sess&&x.sess.id===e.sess);if(B){B.alarmT=0;B.el.classList.remove('alarm')}}return}
   const p=ev.target.closest('button[data-play]');if(p)play(+p.dataset.play);
 });
