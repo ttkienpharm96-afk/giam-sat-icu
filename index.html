@@ -493,9 +493,10 @@ function cntMask(B,z){const[x0,y0,x1,y1]=zr(B,z);let c=0;for(let y=y0;y<y1;y++)f
 function fracDiff(B,a,b,z,thr){const[x0,y0,x1,y1]=zr(B,z);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){const i=y*B.W+x;n++;if(Math.abs(a[i]-b[i])>thr)c++}return n?c/n*100:0}
 function ringOf(f){const x0=Math.max(0,f.x-f.w*.8),x1=Math.min(1,f.x+f.w*1.8),y0=Math.max(0,f.y),y1=Math.min(1,f.y+f.h*2);return{x:x0,y:y0,w:x1-x0,h:y1-y0}}
 function inR(B,r,x,y){const[x0,y0,x1,y1]=zr(B,r);return x>=x0&&x<x1&&y>=y0&&y<y1}
-function cntExN(B,r,ex){const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;c+=B.mask[y*B.W+x]}return[n?c/n*100:0,n]}
-function cntEx(B,r,ex){const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;c+=B.mask[y*B.W+x]}return n?c/n*100:0}
-function cntDiffEx(B,a,b,r,ex,thr){const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;const i=y*B.W+x;if(Math.abs(a[i]-b[i])>thr)c++}return n?c/n*100:0}
+function inX(E,x,y){for(const q of E)if(x>=q[0]&&x<q[2]&&y>=q[1]&&y<q[3])return true;return false}
+function cntExN(B,r,ex){const[x0,y0,x1,y1]=zr(B,r),E=ex.map(e=>zr(B,e));let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(inX(E,x,y))continue;n++;c+=B.mask[y*B.W+x]}return[n?c/n*100:0,n]}
+function cntEx(B,r,ex){const[x0,y0,x1,y1]=zr(B,r),E=ex.map(e=>zr(B,e));let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(inX(E,x,y))continue;n++;c+=B.mask[y*B.W+x]}return n?c/n*100:0}
+function cntDiffEx(B,a,b,r,ex,thr){const[x0,y0,x1,y1]=zr(B,r),E=ex.map(e=>zr(B,e));let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(inX(E,x,y))continue;n++;const i=y*B.W+x;if(Math.abs(a[i]-b[i])>thr)c++}return n?c/n*100:0}
 /* tự nhận diện vùng bằng màu da + hình dạng (không AI) */
 function findFace(B){
   const v=B.vid;if(v.readyState<2||!v.videoWidth)return null;
@@ -568,7 +569,7 @@ function relocFace(B){
   const z=zonesFrom(f);B.c.zones.face=z.face;B.c.zones.head=z.head;B.c.zones.ftight=z.ftight;save();B.prev=null;B.faceHist=[];B.lastClock=0;
   info(B,'Cập nhật vị trí mặt sau khi bệnh nhân đổi tư thế','zone');
 }
-function newSkin(B,sk,r,ex){if(!B.baseSkin)return 0;const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;const i=y*B.W+x;if(sk[i]&&!B.baseSkin[i])c++}return n?c/n*100:0}
+function newSkin(B,sk,r,ex){if(!B.baseSkin)return 0;const[x0,y0,x1,y1]=zr(B,r),E=ex.map(e=>zr(B,e));let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(inX(E,x,y))continue;n++;const i=y*B.W+x;if(sk[i]&&!B.baseSkin[i])c++}return n?c/n*100:0}
 function findHand(B,sk,face,rr,fp,mov){const hMin=P(B,'handMin')/100*(mov?2:1);
   const W=B.W,H=B.H,bs=B.baseSkin;if(!bs)return null;
   const[x0,y0,x1,y1]=zr(B,rr),[px0,py0,px1,py1]=zr(B,fp),M=new Uint8Array(W*H);
@@ -634,7 +635,7 @@ function tickBed(B){
   if(B.careUntil&&now>=B.careUntil){B.careUntil=0;info(B,'Hết thời gian chăm sóc – giám sát lại','care');resetRefs(B);updCare(B);return}
   const warm=now-B.startT<3000,caring=now<B.careUntil;
 
-  if(B.mode==='cam'){if(tot>0)B.sameSince=now;else if(now-B.sameSince>15000)fire(B,'cam','Hình bị đứng – camera không cập nhật')}
+  if(B.mode==='cam'){if(tot>0)B.sameSince=now;else if(now-B.sameSince>15000){fire(B,'cam','Hình bị đứng – camera không cập nhật');if(Date.now()-(B.restartT||0)>60000)setTimeout(()=>restartCam(B,'Hình bị đứng – đã tự bật lại camera'),500)}}
   if(!warm&&covered)fire(B,'cam','Camera bị che hoặc tối hoàn toàn');
   else if(mean<S.lightThr)fire(B,'light');
 
@@ -727,6 +728,7 @@ async function actFlush(B){
 /* ---------- cảnh báo ---------- */
 function fire(B,type,title){
   const r=RULES[type],now=clk(B);
+  if(type==='head'&&now-(B.lastAlert.exit??-1e15)<15000)return;   // cùng một sự kiện ngồi dậy: không báo trùng
   if(B.lastAlert[type]!=null&&now-B.lastAlert[type]<r.cd(B)*60000)return;
   B.lastAlert[type]=now;
   const pk=B.pk||[],e={id:++seq,t:Date.now(),vt:B.mode==='file'?now:null,sess:B.sess?B.sess.id:0,bed:B.c.name,grp:B.c.grp||'def',f:pk.length?{fm:+Math.max(...pk.map(x=>x[1])).toFixed(1),nsk:+Math.max(...pk.map(x=>x[2])).toFixed(1),occ:+Math.max(...pk.map(x=>x[3])).toFixed(1)}:null,kind:'alert',type,title:title||(typeof r.t==='function'?r.t(B):r.t),tips:r.tips(B),v:'',clips:[],rep:0,lb:Date.now()};
@@ -736,7 +738,7 @@ function fire(B,type,title){
   if(S.rec&&B.mode==='cam'&&type!=='light')clipFor(B,e);
   if(r.lvl!=='lo'){const rc=B.el.getBoundingClientRect();if(rc.top<0||rc.top>innerHeight*.5)B.el.scrollIntoView({block:'start',behavior:'smooth'})}
 }
-function info(B,txt,type){log.push({id:++seq,t:Date.now(),vt:B.mode==='file'?clk(B):null,sess:B.sess?B.sess.id:0,bed:B.c.name,kind:'info',type:type||'info',title:txt,v:''});saveLog();renderAlerts()}
+function info(B,txt,type){if(B.lastInfo===txt&&Date.now()-(B.lastInfoT||0)<60000)return;B.lastInfo=txt;B.lastInfoT=Date.now();log.push({id:++seq,t:Date.now(),vt:B.mode==='file'?clk(B):null,sess:B.sess?B.sess.id:0,bed:B.c.name,kind:'info',type:type||'info',title:txt,v:''});saveLog();renderAlerts()}
 const liveSess=()=>new Set(beds.filter(b=>b.sess).map(b=>b.sess.id));
 function renderBanner(){
   const ss=liveSess(),pend=log.filter(e=>ss.has(e.sess)&&e.kind==='alert'&&!e.v&&e.vt==null&&RULES[e.type].lvl!=='lo');
@@ -862,7 +864,7 @@ setInterval(()=>{
 /* ---------- clip ---------- */
 function rollStart(B){
   rollStop(B);if(!S.rec||B.mode!=='cam'||!B.stream||!window.MediaRecorder)return;
-  const seg=()=>{let r;try{r=new MediaRecorder(B.stream,{videoBitsPerSecond:1500000})}catch(e){try{r=new MediaRecorder(B.stream)}catch(x){return}}
+  const seg=()=>{let r;try{r=new MediaRecorder(B.stream,{videoBitsPerSecond:1000000})}catch(e){try{r=new MediaRecorder(B.stream)}catch(x){return}}
     const ch=[],t0=Date.now();
     r.ondataavailable=e=>{if(e.data.size)ch.push(e.data)};
     r.onstop=()=>{if(!ch.length)return;const b=new Blob(ch,{type:r.mimeType||'video/webm'});B.lastSeg={blob:b,t:t0};
@@ -988,7 +990,7 @@ $('btnClear').addEventListener('click',()=>{
 function restartLoop(){
   clearInterval(loopT);const any=beds.some(b=>b.running);if(!any){loopT=null;return}
   const rate=Math.max(1,...beds.filter(b=>b.running&&b.mode==='file').map(b=>b.vid.playbackRate||1));
-  loopT=setInterval(()=>{for(const B of beds)tickBed(B)},Math.max(25,200/rate));
+  loopT=setInterval(()=>{for(const B of beds){try{tickBed(B);B.errN=0}catch(err){B.errN=(B.errN||0)+1;if(B.errN===1)console.warn('tickBed',err);if(B.errN>25){B.errN=0;resetRefs(B);chip(B,'Lỗi xử lý – đã tự khởi động lại','bad')}}}},Math.max(25,200/rate));
   if(!raf)raf=requestAnimationFrame(draw);
 }
 function begin(B,m,name){
@@ -1024,6 +1026,7 @@ async function listCams(){
       sel.innerHTML='<option value="__user">Camera trước</option><option value="__env">Camera sau</option>'+ds.map((d,i)=>`<option value="${esc(d.deviceId)}">${esc(d.label||'Camera '+(i+1))}</option>`).join('');
       if([...sel.options].some(o=>o.value===v))sel.value=v;else sel.value='__user'}}catch(e){}
 }
+async function restartCam(B,why){if(!B.running||B.mode!=='cam')return;B.restartT=Date.now();await startCam(B);if(B.running)info(B,why,'gap')}
 async function startCam(B){
   audio();stopBed(B);
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){chip(B,'Trình duyệt không cho mở camera','bad');return}
@@ -1031,7 +1034,7 @@ async function startCam(B){
   try{
     B.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:id&&id.indexOf('__')!==0?{deviceId:{exact:id},width:{ideal:960}}:{width:{ideal:960},facingMode:id==='__env'?'environment':'user'}});
     B.vid.srcObject=B.stream;B.vid.playbackRate=1;await B.vid.play();listCams();begin(B,'cam','camera');
-    B.stream.getVideoTracks()[0].addEventListener('ended',()=>{if(B.mode==='cam'&&B.running){B.lastAlert.cam=null;fire(B,'cam','Mất tín hiệu camera');chip(B,'Mất tín hiệu camera','bad')}});
+    B.stream.getVideoTracks()[0].addEventListener('ended',()=>{if(B.mode==='cam'&&B.running){B.lastAlert.cam=null;fire(B,'cam','Mất tín hiệu camera');if(Date.now()-(B.restartT||0)>60000)setTimeout(()=>restartCam(B,'Camera bị ngắt – đã tự bật lại'),3000);chip(B,'Mất tín hiệu camera','bad')}});
   }catch(e){chip(B,'Không mở được camera','bad');B.q('.empty').textContent='Không mở được camera ('+e.name+'). Kiểm tra quyền camera, camera có đang dùng ở ô khác không, hoặc mở file qua http://localhost.'}
 }
 async function startFile(B,f){
@@ -1042,7 +1045,13 @@ async function startFile(B,f){
 window.addEventListener('beforeunload',ev=>{if(beds.some(b=>b.running&&b.mode==='cam')){beds.forEach(actFlush);ev.preventDefault();ev.returnValue=''}});
 function wake(){for(const B of beds)if(B.running&&B.mode==='cam'&&B.vid.paused)B.vid.play().catch(()=>{})}
 addEventListener('scroll',()=>{clearTimeout(window.__wk);window.__wk=setTimeout(wake,200)},{passive:true});
-document.addEventListener('visibilitychange',()=>{wake();if(document.visibilityState==='visible'&&beds.some(b=>b.running))try{navigator.wakeLock&&navigator.wakeLock.request('screen').catch(()=>{})}catch(e){}});
+document.addEventListener('visibilitychange',()=>{
+  const vis=document.visibilityState==='visible';
+  for(const B of beds){if(!B.running||B.mode!=='cam')continue;
+    if(!vis){B.hiddenAt=Date.now();info(B,'App chuyển nền / tắt màn hình – TẠM NGỪNG giám sát','gap')}
+    else{if(B.hiddenAt){const m=Math.round((Date.now()-B.hiddenAt)/1000);info(B,'Giám sát lại sau '+(m>=60?Math.floor(m/60)+' phút '+(m%60)+' giây':m+' giây')+' gián đoạn','gap');B.hiddenAt=0}
+      const tr=B.stream&&B.stream.getVideoTracks()[0];if(!tr||tr.readyState==='ended'||tr.muted)setTimeout(()=>restartCam(B,'Camera bị ngắt khi app chạy nền – đã tự bật lại'),300);else resetRefs(B)}}
+  wake();if(document.visibilityState==='visible'&&beds.some(b=>b.running))try{navigator.wakeLock&&navigator.wakeLock.request('screen').catch(()=>{})}catch(e){}});
 
 /* ---------- vẽ chồng ---------- */
 const ZC={face:'#e5484d',head:'#d98a00',bed:'#35d0e0'},ZN={face:'Mặt / NKQ',head:'Đầu',bed:'Giường'};
@@ -1057,7 +1066,7 @@ function drawBed(B){
     else o.drawImage(B.vid,0,0,cW,cH);
   }
   if(S.showMask&&B.mask&&B.mask.length===B.W*B.H&&B.mc.width===B.W){
-    const im=B.mctx.createImageData(B.W,B.H);
+    const im=B.mImg&&B.mImg.width===B.W&&B.mImg.height===B.H?B.mImg:(B.mImg=B.mctx.createImageData(B.W,B.H));im.data.fill(0);
     for(let i=0;i<B.mask.length;i++)if(B.mask[i]){im.data[i*4]=255;im.data[i*4+1]=60;im.data[i*4+2]=60;im.data[i*4+3]=170}
     B.mctx.putImageData(im,0,0);o.imageSmoothingEnabled=false;o.drawImage(B.mc,0,0,cW,cH);
   }
