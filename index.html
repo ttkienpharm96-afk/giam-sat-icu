@@ -108,10 +108,21 @@ details summary{cursor:pointer;font-weight:650;min-height:32px}
 #report ul{margin:4px 0 8px;padding-left:18px;font-size:14px}
 input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
 @media print{body.prt *{visibility:hidden}body.prt #report,body.prt #report *{visibility:visible;color:#000}body.prt #report{position:absolute;left:0;top:0;width:100%}}
+.banner{position:fixed;z-index:60;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));top:max(8px,env(safe-area-inset-top));max-width:760px;margin:0 auto;background:var(--hi);color:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 12px 40px rgba(0,0,0,.45);animation:pulse 1.2s ease-in-out infinite}
+.banner.mid{background:var(--mid);color:#1a1100}
+@keyframes pulse{50%{box-shadow:0 0 0 8px rgba(229,72,77,.35),0 12px 40px rgba(0,0,0,.45)}}
+@media(prefers-reduced-motion:reduce){.banner{animation:none}}
+.banner .bt{display:flex;justify-content:space-between;gap:10px;font-size:14px;font-weight:600;opacity:.9}
+.banner h2{font-size:clamp(20px,5vw,26px);line-height:1.2;margin:6px 0 4px;font-weight:750}
+.banner ul{margin:4px 0 10px;padding-left:20px;font-size:15px}
+.banner .v button{min-height:44px;font-size:15px;padding:8px 14px;background:rgba(255,255,255,.95);color:#111;border:0;font-weight:650}
+.atxt{position:absolute;left:8px;right:8px;bottom:8px;background:var(--hi);color:#fff;font-weight:700;font-size:15px;padding:8px 10px;border-radius:8px;text-align:center;pointer-events:none}
+.atxt.mid{background:var(--mid);color:#1a1100}
 .note{font-size:13px;color:var(--mute);padding:0 max(3vw,14px) max(24px,env(safe-area-inset-bottom));max-width:1100px}
 </style>
 </head>
 <body>
+<div class="banner" id="banner" role="alertdialog" aria-live="assertive" hidden></div>
 <header>
   <h1>Giám sát giường ICU</h1>
   <span class="pill" id="pill">Chưa có giường nào đang giám sát</span>
@@ -371,7 +382,7 @@ $('btnDir').addEventListener('click',async()=>{
 
 /* ---------- ô giường ---------- */
 const TILE=`<div class="th"><input class="bn" aria-label="Tên giường"><span class="chip">Chưa có nguồn hình</span></div>
-<div class="stage"><video playsinline muted></video><canvas></canvas><div class="empty">Bật camera hoặc mở video để bắt đầu.<br>Kéo chuột trên hình để vẽ vùng.</div></div>
+<div class="stage"><video playsinline muted></video><canvas></canvas><div class="atxt" hidden></div><div class="empty">Bật camera hoặc mở video để bắt đầu.<br>Kéo chuột trên hình để vẽ vùng.</div></div>
 <div class="mm"><div>Mặt<b data-m="face">–</b></div><div>Giường<b data-m="bed">–</b></div><div>Bất động<b data-m="still">–</b></div><div>Độ sáng<b data-m="light">–</b></div></div>
 <div class="row sm"><select class="cs" aria-label="Chọn camera"><option value="">Camera mặc định</option></select><button class="pri bc">Bật camera</button>
 <label class="btn">Chấm video<input type="file" accept="video/*" hidden></label><button class="bs">Dừng</button><button class="br">● Ghi</button></div>
@@ -563,7 +574,19 @@ function fire(B,type,title){
 }
 function info(B,txt,type){log.push({id:++seq,t:Date.now(),vt:B.mode==='file'?clk(B):null,sess:B.sess?B.sess.id:0,bed:B.c.name,kind:'info',type:type||'info',title:txt,v:''});saveLog();renderAlerts()}
 const liveSess=()=>new Set(beds.filter(b=>b.sess).map(b=>b.sess.id));
-function renderAlerts(newId){
+function renderBanner(){
+  const ss=liveSess(),pend=log.filter(e=>ss.has(e.sess)&&e.kind==='alert'&&!e.v&&e.vt==null&&RULES[e.type].lvl!=='lo');
+  const bn=$('banner'),e=pend[pend.length-1];
+  if(!e){bn.hidden=true}else{
+    bn.className='banner '+RULES[e.type].lvl;bn.hidden=false;
+    bn.innerHTML=`<div class="bt"><span>⚠ ${esc(e.bed)} · ${hm(e.t)}</span><span>${pend.length>1?'+'+(pend.length-1)+' cảnh báo khác':''}</span></div>
+      <h2>${esc(e.title)}</h2><ul>${e.tips.map(t=>'<li>'+esc(t)+'</li>').join('')}</ul>
+      <div class="v"><button data-id="${e.id}" data-v="tp">Đúng – đã xử lý</button><button data-id="${e.id}" data-v="fp">Cảnh báo sai</button><button data-id="${e.id}" data-v="seen">Đã xem</button></div>`;
+  }
+  for(const B of beds){const a=B.q('.atxt'),x=B.sess?pend.filter(p=>p.sess===B.sess.id).pop():null;
+    if(x){a.hidden=false;a.className='atxt '+RULES[x.type].lvl;a.textContent='⚠ '+x.title}else a.hidden=true}
+}
+function renderAlerts(newId){renderBanner();
   const ss=liveSess(),items=log.filter(e=>ss.has(e.sess)).slice(-100).reverse();
   if(!items.length){$('alerts').innerHTML='<p class="empty2">Chưa có cảnh báo.</p>';return}
   $('alerts').innerHTML=items.map(e=>e.kind==='alert'
