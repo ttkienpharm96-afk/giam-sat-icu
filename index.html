@@ -443,7 +443,7 @@ function makeBed(i){
   ov.addEventListener('pointerdown',e=>{if(!B.running)return;const p=pt(e);B.drag={k:document.querySelector('input[name=zone]:checked').value,p0:p,z:{x:p.x,y:p.y,w:0,h:0}};ov.setPointerCapture(e.pointerId)});
   ov.addEventListener('pointermove',e=>{if(!B.drag)return;const p=pt(e),a=B.drag.p0;B.drag.z={x:Math.min(a.x,p.x),y:Math.min(a.y,p.y),w:Math.abs(p.x-a.x),h:Math.abs(p.y-a.y)}});
   ov.addEventListener('pointerup',()=>{if(!B.drag)return;const d=B.drag;B.drag=null;
-    if(d.z.w>.03&&d.z.h>.03){c.zones[d.k]=d.z;if(d.k==='face'){const fw=d.z.w/1.3,fh=d.z.h/1.22,f={x:d.z.x+.15*fw,y:d.z.y+.12*fh,w:fw,h:fh};c.zones.head=zonesFrom(f).head}save();resetRefs(B);info(B,'Đã cập nhật vùng '+ZN[d.k]+(d.k==='face'?' (vùng đầu tự chỉnh theo)':''))}});
+    if(d.z.w>.03&&d.z.h>.03){c.zones[d.k]=d.z;if(d.k==='face'){B.zoneOk=true;const fw=d.z.w/1.3,fh=d.z.h/1.22,f={x:d.z.x+.15*fw,y:d.z.y+.12*fh,w:fw,h:fh};c.zones.head=zonesFrom(f).head;c.zones.ftight=f}save();resetRefs(B);info(B,'Đã cập nhật vùng '+ZN[d.k]+(d.k==='face'?' (vùng đầu tự chỉnh theo)':''))}});
   B.vid.addEventListener('ended',()=>{if(B.mode!=='file')return;B.running=false;saveFeat(B);restartLoop();saveLog();renderScore();chip(B,'Đã chấm xong video','on');updFileRow()});
   updCare(B);
   return B;
@@ -486,9 +486,9 @@ function findFace(B){
       if(px>0&&sk[k-1]&&!lab[k-1]){lab[k-1]=id;st.push(k-1)}if(px<W-1&&sk[k+1]&&!lab[k+1]){lab[k+1]=id;st.push(k+1)}
       if(py>0&&sk[k-W]&&!lab[k-W]){lab[k-W]=id;st.push(k-W)}if(py<H-1&&sk[k+W]&&!lab[k+W]){lab[k+W]=id;st.push(k+W)}}
     const bw=x1-x0+1,bh=y1-y0+1,area=n/N,fill=n/(bw*bh),asp=bw/bh;
-    if(area<.003||area>.25||asp<.45||asp>2.2||fill<.4)continue;
+    if(area<.003||area>.65||asp<.4||asp>2.2||fill<.4)continue;
     const cx=(x0+x1+1)/2/W,cy=(y0+y1+1)/2/H,score=Math.sqrt(area)*fill*Math.max(.1,1-Math.abs(Math.log(asp/.85)))*Math.max(.2,1.3-Math.hypot(cx-.5,cy-.4));
-    if(!best||score>best.score)best={x:x0/W,y:y0/H,w:bw/W,h:bh/H,score};
+    const hh=Math.min(bh,bw*1.3);if(!best||score>best.score)best={x:x0/W,y:y0/H,w:bw/W,h:hh/H,score};
   }
   return best;
 }
@@ -501,16 +501,16 @@ function zonesFrom(f){
     if(dy>=0){const y0=cl(f.y-f.h*.6,0,1);bed={x:bx,y:y0,w:bw,h:1-y0}}else{const y1=cl(f.y+f.h*1.6,0,1);bed={x:bx,y:0,w:bw,h:y1}}}
   else{const bh=Math.min(1,Math.max(f.h*3.6,.35)),by=cl(fcy-bh/2,0,1-bh);
     if(dx>=0){const x0=cl(f.x-f.w*.6,0,1);bed={x:x0,y:by,w:1-x0,h:bh}}else{const x1=cl(f.x+f.w*1.6,0,1);bed={x:0,y:by,w:x1,h:bh}}}
-  return{face,head,bed};
+  return{face,head,bed,ftight:{x:f.x,y:f.y,w:f.w,h:f.h}};
 }
 function zmsg(B,t){const m=B.q('.zmsg');m.textContent=t;m.hidden=!t}
 async function autoZones(B,manual,tries){
   if(!B.running)return;tries=tries||0;zmsg(B,'Đang tự nhận diện mặt, đầu, vùng giường…');
   const got=[];for(let i=0;i<12&&B.running&&got.length<6;i++){const f=findFace(B);if(f)got.push(f);await new Promise(r=>setTimeout(r,250))}
-  if(got.length<3){if(!manual&&tries<3&&B.running){zmsg(B,'Chưa thấy rõ mặt bệnh nhân – sẽ thử lại sau 10 giây…');setTimeout(()=>autoZones(B,false,tries+1),10000);return}zmsg(B,'Không tự tìm được mặt bệnh nhân (thiếu sáng, che mặt hoặc góc quay). Hãy kéo trên hình để vẽ vùng, hoặc bấm “Tự nhận diện vùng” để thử lại.');return}
+  if(got.length<3){if(!manual&&tries<3&&B.running){zmsg(B,'Chưa thấy rõ mặt bệnh nhân – sẽ thử lại sau 10 giây…');setTimeout(()=>autoZones(B,false,tries+1),10000);return}zmsg(B,'Không tự tìm được mặt bệnh nhân (thiếu sáng, che mặt hoặc góc quay). App CHƯA theo dõi tay cho đến khi anh/chị kéo trên hình để vẽ khung Mặt, hoặc bấm “Tự nhận diện vùng” để thử lại.');return}
   const med=k=>{const a=got.map(g=>g[k]).sort((p,q)=>p-q);return a[a.length>>1]};
   const f={x:med('x'),y:med('y'),w:med('w'),h:med('h')},z=zonesFrom(f);
-  B.c.zones=z;save();resetRefs(B);B.lastPos=clk(B);B.faceRef=f;
+  B.c.zones=z;save();resetRefs(B);B.lastPos=clk(B);B.faceRef=f;B.zoneOk=true;
   zmsg(B,'Đã tự nhận diện vùng. Nếu khung đỏ chưa ôm đúng mặt, kéo trên hình để chỉnh lại.');
   info(B,(manual?'Tự nhận diện lại vùng':'Tự nhận diện vùng khi bật camera')+' – mặt tại '+Math.round((f.x+f.w/2)*100)+'%, '+Math.round((f.y+f.h/2)*100)+'%','zone');
   setTimeout(()=>{const m=B.q('.zmsg');if(m.textContent.startsWith('Đã tự'))zmsg(B,'')},12000);
@@ -519,11 +519,11 @@ function relocFace(B){
   const o=B.c.zones.face,f=findFace(B);if(!f)return;
   const ocx=o.x+o.w/2,ocy=o.y+o.h/2,ncx=f.x+f.w/2,ncy=f.y+f.h/2,r=(f.w*f.h)/(o.w*o.h/1.6);
   if(Math.hypot(ncx-ocx,ncy-ocy)>Math.max(o.w,o.h)*1.5||r<.4||r>2.5)return;
-  const z=zonesFrom(f);B.c.zones.face=z.face;B.c.zones.head=z.head;save();B.prev=null;B.faceHist=[];B.lastClock=0;
+  const z=zonesFrom(f);B.c.zones.face=z.face;B.c.zones.head=z.head;B.c.zones.ftight=z.ftight;save();B.prev=null;B.faceHist=[];B.lastClock=0;
   info(B,'Cập nhật vị trí mặt sau khi bệnh nhân đổi tư thế','zone');
 }
 function newSkin(B,sk,r,ex){if(!B.baseSkin)return 0;const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;const i=y*B.W+x;if(sk[i]&&!B.baseSkin[i])c++}return n?c/n*100:0}
-function resetRefs(B){B.prev=null;B.faceHist=[];B.lastClock=0}
+function resetRefs(B){B.lastRing=0;B.occSince=0;B.prev=null;B.faceHist=[];B.lastClock=0}
 function enhance(g,W,H){
   const h=new Uint32Array(256);for(let i=0;i<g.length;i++)h[g[i]]++;
   let lo=0,hi=255,acc=0;const n=g.length;
@@ -570,16 +570,18 @@ function tickBed(B){
   const staff=now<B.staffUntil,hold=caring||staff;
   if(bm>1.5)B.lastMotion=now;
   const gOut=outN>W*H*.05?(mc-bc)/outN*100:bm,gm=bm,[rp,ringPx]=cntExN(B,ringOf(z.face),[z.face,z.head]),hmv=cntEx(B,z.head,[z.face]);
-  const rpr=B.ref?cntDiffEx(B,g,B.ref,ringOf(z.face),[z.face,z.head],dT):0,ringOn=rp>S.ringThr||rpr>S.ringPres;
+  // bằng chứng có tay: DA MỚI xuất hiện quanh mặt (so với hình lúc bình thường) – cổ/tóc cử động không tính
+  const ringSmall=ringPx<fn*.6,ringR=ringSmall?FULL:ringOf(z.face),fx=z.ftight||z.face,fpad={x:fx.x-fx.w*.12,y:fx.y-fx.h*.12,w:fx.w*1.24,h:fx.h*1.24},nsk=newSkin(B,skn,ringR,[fpad]),rpr=nsk,ringOn=nsk>S.ringPres;
   if(ringOn)B.lastRing=now;
-  const shake=gm>S.gmMax&&gOut>S.gmMax,headMove=hmv>S.headMoveThr&&!ringOn,ringSmall=ringPx<fn*.6,handOk=!S.handRing||ringSmall||now-(B.lastRing||-1e15)<=S.ringWin*1000;
-  const faceOn=fm>fT&&!staff&&!shake&&!headMove&&handOk&&fm>=S.faceRatio*gm;
+  const shake=gm>S.gmMax&&gOut>S.gmMax,headMove=hmv>S.headMoveThr&&!ringOn,handOk=!S.handRing||now-(B.lastRing||-1e15)<=S.ringWin*1000;
+  const strong=nsk>S.ringPres*2,fTe=strong?fT*.5:fT;
+  const faceOn=fm>fTe&&!staff&&!shake&&!headMove&&handOk&&fm>=S.faceRatio*gm;
   B.why=fm>fT?(staff?'có người cạnh giường':shake?'cả hình chuyển động (rung/đổi sáng)':headMove?'đầu cử động, không thấy tay':!handOk?'không thấy tay đi vào':fm<S.faceRatio*gm?'chuyển động lan khắp hình':'tính là cử động tay'):'';
   if(B.feat)B.feat.push(now,fm,outP,caring?1:0,covered?1:0,rp,gm,hmv,rpr);
   B.faceHist.push([now,faceOn?dt:0]);
   while(B.faceHist.length&&B.faceHist[0][0]<now-S.faceWin*1000)B.faceHist.shift();
   const act=B.faceHist.reduce((a,h)=>a+h[1],0)/1000;
-  if(!warm&&!hold&&!covered&&act>=fA){fire(B,'face');B.faceHist=[]}
+  if(!warm&&!hold&&!covered&&B.zoneOk&&act>=fA){fire(B,'face');B.faceHist=[]}
 
   if(!warm&&!covered&&!staff&&now-B.lastMotion>3000){
     if(Math.abs(mean-B.refMean)>15){B.ref=g;B.headRef=g;B.refMean=mean;if(!B.occSince){B.base=g;B.baseSkin=skn;B.baseMean=mean}info(B,'Thay đổi ánh sáng – cập nhật mốc so sánh')}
@@ -597,21 +599,21 @@ function tickBed(B){
   let occ=0,rb=0;
   if(B.base&&!warm&&!covered&&!shake){
     if(Math.abs(mean-B.baseMean)>20){B.base=g;B.baseSkin=skn;B.baseMean=mean}
-    occ=cntDiffEx(B,g,B.base,z.face,[],dT);rb=ringSmall?100:Math.max(newSkin(B,skn,ringOf(z.face),[z.face,z.head])*2,cntDiffEx(B,g,B.base,ringOf(z.face),[z.face,z.head],dT));
-    const handOn=occ>S.occThr&&rb>S.ringPres&&!caring;
+    occ=cntDiffEx(B,g,B.base,z.face,[],dT);rb=nsk;
+    const handOn=B.zoneOk&&occ>(strong?S.occThr*.5:S.occThr)&&rb>S.ringPres&&!caring;
     if(handOn){if(!B.occSince)B.occSince=now;else if(now-B.occSince>=S.occSec*1000&&now-(B.lastAlert.face??-1e15)>30000)fire(B,'hand')}
     else{B.occSince=0;if(occ<S.occThr*.4&&now-B.lastMotion>10000&&now-(B.baseT||0)>30000){B.base=g;B.baseSkin=skn;B.baseMean=mean;B.baseT=now}}
   }
   const stillMs=now-B.lastPos;
   if(!caring&&stillMs>P(B,'stillMin')*60000)fire(B,'still');
   if(B.mode==='cam')actAdd(B,bm,faceOn?dt:0);
-  B.cur={occ,occOn:!!B.occSince,act,bm,stillMs,mean,staff,caring,fA,shake,fm,fT,handOk,ringSmall};
+  B.cur={close:ringSmall&&nsk===0&&(z.ftight||z.face).w>.4,occ,occOn:!!B.occSince,act,bm,stillMs,mean,staff,caring,fA,shake,fm,fT,handOk,ringSmall};
   const w=Date.now();if(w-B.lastMeter>500){B.lastMeter=w;meters(B)}
 }
 function meters(B){
   const c=B.cur;if(!c)return;const m=s=>B.q('[data-m='+s+']');
   m('face').textContent=c.act.toFixed(1)+'/'+c.fA+'s';m('bed').textContent=(c.bm<1?'Yên':c.bm<5?'Nhẹ':'Nhiều')+' '+c.bm.toFixed(1)+'%';
-  const dg=B.q('.diag');if(dg)dg.textContent='Vùng mặt: '+(c.fm>c.fT?'đang cử động ('+c.fm.toFixed(0)+'%)':'yên')+' · Tay: '+(c.ringSmall?'không kiểm tra (mặt sát mép hình)':c.handOk?'có tay gần mặt':'chưa thấy tay')+(c.occ>S.occThr*.5?' · Mặt bị che '+c.occ.toFixed(0)+'%'+(c.occOn?' (đang theo dõi tay đặt yên)':''):'')+(c.act>0?' · Đang đếm '+c.act.toFixed(1)+'/'+c.fA+' giây':'')+(B.why&&B.why!=='tính là cử động tay'?' · Bỏ qua: '+B.why:B.why?' · Đang đếm cử động tay':'');
+  const dg=B.q('.diag');if(dg&&B.zoneOk&&c.close){dg.textContent='Mặt quá gần camera – app không thấy được tay đi lên nên CHƯA theo dõi tay. Đặt camera xa hơn để thấy cả mặt, vai và ngực.'}else if(dg&&!B.zoneOk){dg.textContent='Chưa xác định được vị trí mặt – chưa theo dõi tay. Kéo trên hình để vẽ khung Mặt, hoặc bấm “Tự nhận diện vùng”.'}else if(dg)dg.textContent='Vùng mặt: '+(c.fm>c.fT?'đang cử động ('+c.fm.toFixed(0)+'%)':'yên')+' · Tay: '+(c.handOk?'có tay gần mặt':'chưa thấy tay')+(c.occ>S.occThr*.5?' · Mặt bị che '+c.occ.toFixed(0)+'%'+(c.occOn?' (đang theo dõi tay đặt yên)':''):'')+(c.act>0?' · Đang đếm '+c.act.toFixed(1)+'/'+c.fA+' giây':'')+(B.why&&B.why!=='tính là cử động tay'?' · Bỏ qua: '+B.why:B.why?' · Đang đếm cử động tay':'');
   m('still').textContent=Math.floor(c.stillMs/60000)+'ph'+p2(Math.floor(c.stillMs/1000)%60);m('light').textContent=Math.round(c.mean);
   if(c.caring)chip(B,'Đang chăm sóc – còn '+Math.ceil((B.careUntil-clk(B))/60000)+' ph','warn');
   else if(c.staff)chip(B,'Có người cạnh giường – tạm hoãn','warn');
@@ -870,7 +872,7 @@ function restartLoop(){
 }
 function begin(B,m,name){
   B.mode=m;B.sess={id:Date.now()+B.i,mode:m,name,bed:B.c.name,start:Date.now(),maxVt:0};sessions.push(B.sess);
-  B.lastAlert={};B.lastPos=0;B.careUntil=0;B.staffUntil=0;B.running=true;B.feat=m==='file'?[]:null;resetRefs(B);updCare(B);
+  B.lastAlert={};B.zoneOk=!S.autoZone;B.lastPos=0;B.careUntil=0;B.staffUntil=0;B.running=true;B.feat=m==='file'?[]:null;resetRefs(B);updCare(B);
   B.q('.empty').hidden=true;
   if(m==='cam')rollStart(B);
   try{navigator.wakeLock&&navigator.wakeLock.request('screen').catch(()=>{})}catch(e){}
