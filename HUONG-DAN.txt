@@ -1,0 +1,21 @@
+GIÁM SÁT GIƯỜNG ICU – CÀI LÊN IPHONE
+
+1. Đưa cả thư mục này lên một địa chỉ https:// (chỉ cần làm một lần, trên máy tính):
+   - Tốt nhất: nhờ Phòng CNTT đặt lên máy chủ web nội bộ có HTTPS.
+   - Thử nhanh: vào app.netlify.com/drop, kéo-thả cả thư mục vào trang, nhận một địa chỉ https://...netlify.app
+     (hoặc dùng GitHub Pages). Thư mục chỉ chứa mã ứng dụng, không chứa dữ liệu người bệnh.
+
+2. Trên iPhone: mở địa chỉ đó bằng Safari -> bấm "Bật camera" -> Cho phép.
+
+3. Bấm nút Chia sẻ -> "Thêm vào MH chính" -> Thêm.
+   Từ đây mở bằng biểu tượng "Giám sát ICU" trên màn hình chính, chạy toàn màn hình, không cần mạng.
+
+4. Trước khi để máy theo dõi giường:
+   - Cài đặt -> Màn hình & Độ sáng -> Khoá tự động -> Không bao giờ.
+   - Cắm sạc, bật âm lượng, tắt chế độ Im lặng / Tập trung.
+   - Chạm vào màn hình một lần sau khi mở app để bật âm báo.
+   - Không chuyển sang app khác: iPhone sẽ tắt camera khi app chạy nền.
+
+Dữ liệu (nhật ký, clip, mức cử động) lưu trên chính iPhone đó.
+Nút Xuất sẽ mở bảng Chia sẻ để lưu file vào ứng dụng Tệp.
+Khi cập nhật phiên bản mới: thay file trên máy chủ, mở app khi có mạng, đóng hẳn rồi mở lại.
