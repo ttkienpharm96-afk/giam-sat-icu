@@ -529,7 +529,7 @@ function trackFace(B){
   const r=(f.w*f.h)/(t.w*t.h),sz=Math.max(t.w,t.h),d=Math.hypot(f.x+f.w/2-t.x-t.w/2,f.y+f.h/2-t.y-t.h/2);
   if(r<.5||r>2||d>sz*2||d<sz*.06)return;
   const a=.6,n={x:t.x+(f.x-t.x)*a,y:t.y+(f.y-t.y)*a,w:t.w+(f.w-t.w)*a,h:t.h+(f.h-t.h)*a},z=zonesFrom(n);
-  B.c.zones.face=z.face;B.c.zones.head=z.head;B.c.zones.ftight=z.ftight;
+  B.c.zones.face=z.face;B.c.zones.head=z.head;B.c.zones.ftight=z.ftight;B.headMovT=clk(B);
   if(d>sz*.2){B.rebase=true;B.faceHist=[]}
   if(Date.now()-(B.saveT||0)>5000){B.saveT=Date.now();save()}
 }
@@ -541,7 +541,7 @@ function relocFace(B){
   info(B,'Cập nhật vị trí mặt sau khi bệnh nhân đổi tư thế','zone');
 }
 function newSkin(B,sk,r,ex){if(!B.baseSkin)return 0;const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;const i=y*B.W+x;if(sk[i]&&!B.baseSkin[i])c++}return n?c/n*100:0}
-function findHand(B,sk,face,rr,fp){const hMin=P(B,'handMin')/100;
+function findHand(B,sk,face,rr,fp,mov){const hMin=P(B,'handMin')/100*(mov?2:1);
   const W=B.W,H=B.H,bs=B.baseSkin;if(!bs)return null;
   const[x0,y0,x1,y1]=zr(B,rr),[px0,py0,px1,py1]=zr(B,fp),M=new Uint8Array(W*H);
   for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(x>=px0&&x<px1&&y>=py0&&y<py1)continue;const i=y*W+x;if(sk[i]&&!bs[i])M[i]=1}
@@ -562,8 +562,8 @@ function findHand(B,sk,face,rr,fp){const hMin=P(B,'handMin')/100;
     const mx=sx/n,my=sy/n,cxx=sxx/n-mx*mx,cyy=syy/n-my*my,cxy=sxy/n-mx*my,tr=(cxx+cyy)/2,dt=Math.sqrt(((cxx-cyy)/2)**2+cxy*cxy),l1=tr+dt,l2=Math.max(1e-3,tr-dt),el=Math.sqrt(l1/l2);
     let ok=false;
     if(el>=1.5){const th=.5*Math.atan2(2*cxy,cxx-cyy),vx=fcx-mx,vy=fcy-my,vl=Math.hypot(vx,vy)||1,dot=Math.abs(Math.cos(th)*vx/vl+Math.sin(th)*vy/vl);
-      ok=Math.sqrt(dmax)>=fw*.45&&(dot>=.4||Math.sqrt(dmin)<fw*.08)}   // cánh tay: một đầu chạm mặt, đầu kia xa mặt – nghiêng bao nhiêu cũng được; dải da ôm sát viền mặt bị loại
-    else ok=fill>=.3&&n>=fA*.06&&n<=fA*.9;                            // bàn tay gọn
+      ok=Math.sqrt(dmax)>=fw*(mov?.8:.45)&&Math.sqrt(12*l2)>=fw*.2&&(dot>=.4||Math.sqrt(dmin)<fw*.08)}   // cánh tay: một đầu chạm mặt, đầu kia xa mặt – nghiêng bao nhiêu cũng được; dải da ôm sát viền mặt bị loại
+    else ok=!mov&&fill>=.3&&n>=fA*.06&&n<=fA*.9;                            // bàn tay gọn
     if(!ok)continue;
     const c={pct:n/fA*100,x:bx0/W,y:by0/H,w:(bx1-bx0+1)/W,h:(by1-by0+1)/H,el};if(!best||c.pct>best.pct)best=c;
   }
@@ -617,9 +617,10 @@ function tickBed(B){
   if(bm>1.5)B.lastMotion=now;
   const gOut=outN>W*H*.05?(mc-bc)/outN*100:bm,gm=bm,[rp,ringPx]=cntExN(B,ringOf(z.face),[z.face,z.head]),hmv=cntEx(B,z.head,[z.face]);
   // bằng chứng có tay: DA MỚI xuất hiện quanh mặt (so với hình lúc bình thường) – cổ/tóc cử động không tính
-  let ringSmall=ringPx<fn*.6;const ringR=ringSmall?FULL:ringOf(z.face),fx=z.ftight||z.face,fpad={x:fx.x-fx.w*.12,y:fx.y-fx.h*.12,w:fx.w*1.24,h:fx.h*1.24},hb=B.zoneOk?findHand(B,skn,fx,ringR,fpad):null,nsk=hb?hb.pct:0,rpr=nsk;
-  B.handHits=hb?(B.handHits||0)+1:0;B.handBox=hb;const ringOn=B.handHits>=3;
+  let ringSmall=ringPx<fn*.6;const ringR=ringSmall?FULL:ringOf(z.face),fx=z.ftight||z.face,fpad={x:fx.x-fx.w*.12,y:fx.y-fx.h*.12,w:fx.w*1.24,h:fx.h*1.24},hb=B.zoneOk?findHand(B,skn,fx,ringR,fpad,now-(B.headMovT||-1e15)<1500):null,nsk=hb?hb.pct:0,rpr=nsk;
+  B.handHits=hb?(B.handHits||0)+1:0;B.handBox=hb;const ringOn=B.handHits>=4;
   if(ringOn)B.lastRing=now;
+  if(hmv>S.headMoveThr&&!ringOn)B.headMovT=now;
   const shake=gm>S.gmMax&&gOut>S.gmMax,headMove=hmv>S.headMoveThr&&!ringOn,handOk=!S.handRing||now-(B.lastRing||-1e15)<=S.ringWin*1000;
   const strong=nsk>S.ringPres*2,fTe=strong?fT*.5:fT;
   const faceOn=fm>fTe&&!staff&&!shake&&!headMove&&handOk&&fm>=S.faceRatio*gm;
@@ -662,7 +663,7 @@ function tickBed(B){
 function meters(B){
   const c=B.cur;if(!c)return;const m=s=>B.q('[data-m='+s+']');
   m('face').textContent=c.act.toFixed(1)+'/'+c.fA+'s';m('bed').textContent=(c.bm<1?'Yên':c.bm<5?'Nhẹ':'Nhiều')+' '+c.bm.toFixed(1)+'%';
-  const dg=B.q('.diag');if(dg&&B.zoneOk&&c.close){dg.textContent='Mặt quá gần camera – app không thấy được tay đi lên nên CHƯA theo dõi tay. Đặt camera xa hơn để thấy cả mặt, vai và ngực.'}else if(dg&&!B.zoneOk){dg.textContent='Chưa xác định được vị trí mặt – chưa theo dõi tay. Kéo trên hình để vẽ khung Mặt, hoặc bấm “Tự nhận diện vùng”.'}else if(dg)dg.textContent='Vùng mặt: '+(c.fm>c.fT?'đang cử động ('+c.fm.toFixed(0)+'%)':'yên')+' · Tay: '+((B.handHits>=3?'thấy dạng tay sát mặt (khung xanh)':c.handOk?'vừa thấy tay':'chưa thấy tay'))+(c.occ>S.occThr*.5?' · Mặt bị che '+c.occ.toFixed(0)+'%'+(c.occOn?' (đang theo dõi tay đặt yên)':''):'')+(c.act>0?' · Đang đếm '+c.act.toFixed(1)+'/'+c.fA+' giây':'')+(B.why&&B.why!=='tính là cử động tay'?' · Bỏ qua: '+B.why:B.why?' · Đang đếm cử động tay':'');
+  const dg=B.q('.diag');if(dg&&B.zoneOk&&c.close){dg.textContent='Mặt quá gần camera – app không thấy được tay đi lên nên CHƯA theo dõi tay. Đặt camera xa hơn để thấy cả mặt, vai và ngực.'}else if(dg&&!B.zoneOk){dg.textContent='Chưa xác định được vị trí mặt – chưa theo dõi tay. Kéo trên hình để vẽ khung Mặt, hoặc bấm “Tự nhận diện vùng”.'}else if(dg)dg.textContent='Vùng mặt: '+(c.fm>c.fT?'đang cử động ('+c.fm.toFixed(0)+'%)':'yên')+' · Tay: '+((B.handHits>=4?'thấy dạng tay sát mặt (khung xanh)':c.handOk?'vừa thấy tay':'chưa thấy tay'))+(c.occ>S.occThr*.5?' · Mặt bị che '+c.occ.toFixed(0)+'%'+(c.occOn?' (đang theo dõi tay đặt yên)':''):'')+(c.act>0?' · Đang đếm '+c.act.toFixed(1)+'/'+c.fA+' giây':'')+(B.why&&B.why!=='tính là cử động tay'?' · Bỏ qua: '+B.why:B.why?' · Đang đếm cử động tay':'');
   m('still').textContent=Math.floor(c.stillMs/60000)+'ph'+p2(Math.floor(c.stillMs/1000)%60);m('light').textContent=Math.round(c.mean);
   if(c.caring)chip(B,'Đang chăm sóc – còn '+Math.ceil((B.careUntil-clk(B))/60000)+' ph','warn');
   else if(c.staff)chip(B,'Có người cạnh giường – tạm hoãn','warn');
@@ -1026,7 +1027,7 @@ function drawBed(B){
     B.mctx.putImageData(im,0,0);o.imageSmoothingEnabled=false;o.drawImage(B.mc,0,0,cW,cH);
   }
   o.lineWidth=2*dpr;o.font=(12*dpr)+'px system-ui,sans-serif';
-  if(B.handBox&&B.handHits>=3){const h=B.handBox;o.strokeStyle='#2fbf71';o.lineWidth=3*dpr;o.setLineDash([]);o.strokeRect(h.x*cW,h.y*cH,h.w*cW,h.h*cH);o.fillStyle='#2fbf71';o.fillRect(h.x*cW,h.y*cH-17*dpr,34*dpr,17*dpr);o.fillStyle='#06141a';o.fillText('Tay',h.x*cW+5*dpr,h.y*cH-4.5*dpr);o.lineWidth=2*dpr}
+  if(B.handBox&&B.handHits>=4){const h=B.handBox;o.strokeStyle='#2fbf71';o.lineWidth=3*dpr;o.setLineDash([]);o.strokeRect(h.x*cW,h.y*cH,h.w*cW,h.h*cH);o.fillStyle='#2fbf71';o.fillRect(h.x*cW,h.y*cH-17*dpr,34*dpr,17*dpr);o.fillStyle='#06141a';o.fillText('Tay',h.x*cW+5*dpr,h.y*cH-4.5*dpr);o.lineWidth=2*dpr}
   if(S.handRing){const rr=ringOf(B.c.zones.face);o.strokeStyle='rgba(229,72,77,.55)';o.setLineDash([3*dpr,4*dpr]);o.strokeRect(rr.x*cW,rr.y*cH,rr.w*cW,rr.h*cH)}
   for(const k of ['bed','head','face']){
     const z=B.drag&&B.drag.k===k?B.drag.z:B.c.zones[k];
