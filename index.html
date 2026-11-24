@@ -271,14 +271,15 @@ const ZDEF=()=>({face:{x:.38,y:.06,w:.24,h:.26},head:{x:.32,y:.02,w:.36,h:.34},b
 const BDEF=i=>({name:'Giường '+p2(i+1),evd:false,cam:'',grp:'def',zones:ZDEF()});
 const PKEYS=[['faceThr','% cử động vùng mặt'],['faceActive','Giây cử động để báo'],['faceCd','Không nhắc lại (phút)'],['headThr','% đổi tư thế đầu'],['stillMin','Báo bất động sau (phút)']];
 const GRP={def:'Mặc định',sed:'An thần sâu',awake:'Tỉnh / cai máy'};
-const PROF0={sed:{faceThr:4,faceActive:2,faceCd:2,headThr:15,stillMin:120},awake:{faceThr:8,faceActive:5,faceCd:5,headThr:20,stillMin:180}};
-const DEF={diffThr:25,faceThr:6,faceWin:10,faceActive:3,faceCd:2,posThr:10,headThr:15,stillMin:120,lightThr:40,
+const PROF0={sed:{faceThr:4,faceActive:1.2,faceCd:2,headThr:15,stillMin:120},awake:{faceThr:7,faceActive:3,faceCd:5,headThr:20,stillMin:180}};
+const DEF={ver:2,diffThr:25,faceThr:5,faceWin:10,faceActive:1.5,faceCd:2,posThr:10,headThr:15,stillMin:120,lightThr:40,
   careMin:15,repeatMin:2,vol:70,staffThr:3,tolSec:30,keepDays:7,
-  autoZone:true,handRing:true,ringThr:0.8,ringPres:3,ringWin:3,gmMax:12,faceRatio:2,headMoveThr:8,
+  autoZone:true,handRing:true,ringThr:0.8,ringPres:3,ringWin:3,gmMax:12,faceRatio:1.5,headMoveThr:8,
   showMask:true,blur:false,sound:true,rec:true,night:true,autoStaff:true,autoNight:true,nightFrom:22,nightTo:6,nightDiff:30,nightFace:8,n:1,speed:4};
 let S;
 try{S=Object.assign({},DEF,JSON.parse(localStorage.getItem('icuMon2')||'{}'))}catch(e){S=Object.assign({},DEF)}
 S.autoStaff=false;
+if(!(S.ver>=2)){Object.assign(S,{ver:2,faceThr:5,faceActive:1.5,faceRatio:1.5});if(S.prof){S.prof.sed.faceActive=1.2;S.prof.awake.faceActive=3;S.prof.awake.faceThr=7}}
 S.prof={sed:Object.assign({},PROF0.sed,(S.prof||{}).sed),awake:Object.assign({},PROF0.awake,(S.prof||{}).awake)};
 S.beds=[0,1,2,3].map(i=>{const b=Object.assign(BDEF(i),(S.beds||[])[i]||{});b.zones=Object.assign(ZDEF(),b.zones||{});return b});
 try{const old=JSON.parse(localStorage.getItem('icuMon')||'null');if(old&&!localStorage.getItem('icuMon2')){if(old.bed)S.beds[0].name=old.bed;if(old.zones)S.beds[0].zones=Object.assign(ZDEF(),old.zones)}}catch(e){}
@@ -391,7 +392,8 @@ const TILE=`<div class="th"><input class="bn" aria-label="Tên giường"><span 
 <div class="talert" role="alert" aria-live="assertive" hidden></div>
 <div class="stage"><video playsinline muted></video><canvas></canvas><div class="atxt" hidden></div><div class="empty">Bật camera hoặc mở video để bắt đầu.<br>Kéo chuột trên hình để vẽ vùng.</div></div>
 <p class="zmsg" hidden></p>
-<div class="mm"><div>Mặt<b data-m="face">–</b></div><div>Giường<b data-m="bed">–</b></div><div>Bất động<b data-m="still">–</b></div><div>Độ sáng<b data-m="light">–</b></div></div>
+<p class="zmsg diag"></p>
+<div class="mm"><div>Mặt<b data-m="face">–</b></div><div>Cử động người<b data-m="bed">–</b></div><div>Bất động<b data-m="still">–</b></div><div>Độ sáng<b data-m="light">–</b></div></div>
 <div class="row sm"><select class="cs" aria-label="Chọn camera"><option value="">Camera mặc định</option></select><button class="pri bc">Bật camera</button>
 <label class="btn">Chấm video<input type="file" accept="video/*" hidden></label><button class="bs">Dừng</button><button class="br">● Ghi</button></div>
 <div class="row sm"><button class="care">Đang chăm sóc</button><button class="turn">Đã xoay trở</button><button class="bauto">Tự nhận diện vùng</button><button class="bref">Đặt lại mốc</button><label class="chk"><input type="checkbox" class="evd">Có EVD</label><select class="grp" aria-label="Nhóm ngưỡng">${Object.entries(GRP).map(([k,v])=>`<option value="${k}">Nhóm: ${v}</option>`).join('')}</select></div>
@@ -436,7 +438,7 @@ function makeBed(i){
   ov.addEventListener('pointerdown',e=>{if(!B.running)return;const p=pt(e);B.drag={k:document.querySelector('input[name=zone]:checked').value,p0:p,z:{x:p.x,y:p.y,w:0,h:0}};ov.setPointerCapture(e.pointerId)});
   ov.addEventListener('pointermove',e=>{if(!B.drag)return;const p=pt(e),a=B.drag.p0;B.drag.z={x:Math.min(a.x,p.x),y:Math.min(a.y,p.y),w:Math.abs(p.x-a.x),h:Math.abs(p.y-a.y)}});
   ov.addEventListener('pointerup',()=>{if(!B.drag)return;const d=B.drag;B.drag=null;
-    if(d.z.w>.03&&d.z.h>.03){c.zones[d.k]=d.z;save();resetRefs(B);info(B,'Đã cập nhật vùng '+ZN[d.k])}});
+    if(d.z.w>.03&&d.z.h>.03){c.zones[d.k]=d.z;if(d.k==='face'){const fw=d.z.w/1.3,fh=d.z.h/1.22,f={x:d.z.x+.15*fw,y:d.z.y+.12*fh,w:fw,h:fh};c.zones.head=zonesFrom(f).head}save();resetRefs(B);info(B,'Đã cập nhật vùng '+ZN[d.k]+(d.k==='face'?' (vùng đầu tự chỉnh theo)':''))}});
   B.vid.addEventListener('ended',()=>{if(B.mode!=='file')return;B.running=false;saveFeat(B);restartLoop();saveLog();renderScore();chip(B,'Đã chấm xong video','on');updFileRow()});
   updCare(B);
   return B;
@@ -462,6 +464,7 @@ function cntMask(B,z){const[x0,y0,x1,y1]=zr(B,z);let c=0;for(let y=y0;y<y1;y++)f
 function fracDiff(B,a,b,z,thr){const[x0,y0,x1,y1]=zr(B,z);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){const i=y*B.W+x;n++;if(Math.abs(a[i]-b[i])>thr)c++}return n?c/n*100:0}
 function ringOf(f){const x0=Math.max(0,f.x-f.w*.8),x1=Math.min(1,f.x+f.w*1.8),y0=Math.max(0,f.y),y1=Math.min(1,f.y+f.h*2);return{x:x0,y:y0,w:x1-x0,h:y1-y0}}
 function inR(B,r,x,y){const[x0,y0,x1,y1]=zr(B,r);return x>=x0&&x<x1&&y>=y0&&y<y1}
+function cntExN(B,r,ex){const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;c+=B.mask[y*B.W+x]}return[n?c/n*100:0,n]}
 function cntEx(B,r,ex){const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;c+=B.mask[y*B.W+x]}return n?c/n*100:0}
 function cntDiffEx(B,a,b,r,ex,thr){const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;const i=y*B.W+x;if(Math.abs(a[i]-b[i])>thr)c++}return n?c/n*100:0}
 /* tự nhận diện vùng bằng màu da + hình dạng (không AI) */
@@ -558,10 +561,10 @@ function tickBed(B){
   if(S.autoStaff&&outP>S.staffThr)B.staffUntil=now+20000;
   const staff=now<B.staffUntil,hold=caring||staff;
   if(bm>1.5)B.lastMotion=now;
-  const gOut=outN>W*H*.05?(mc-bc)/outN*100:bm,gm=bm,rp=cntEx(B,ringOf(z.face),[z.face,z.head]),hmv=cntEx(B,z.head,[z.face]);
+  const gOut=outN>W*H*.05?(mc-bc)/outN*100:bm,gm=bm,[rp,ringPx]=cntExN(B,ringOf(z.face),[z.face,z.head]),hmv=cntEx(B,z.head,[z.face]);
   const rpr=B.ref?cntDiffEx(B,g,B.ref,ringOf(z.face),[z.face,z.head],dT):0,ringOn=rp>S.ringThr||rpr>S.ringPres;
   if(ringOn)B.lastRing=now;
-  const shake=gm>S.gmMax&&gOut>S.gmMax,headMove=hmv>S.headMoveThr&&!ringOn,handOk=!S.handRing||now-(B.lastRing||-1e15)<=S.ringWin*1000;
+  const shake=gm>S.gmMax&&gOut>S.gmMax,headMove=hmv>S.headMoveThr&&!ringOn,ringSmall=ringPx<fn*.6,handOk=!S.handRing||ringSmall||now-(B.lastRing||-1e15)<=S.ringWin*1000;
   const faceOn=fm>fT&&!staff&&!shake&&!headMove&&handOk&&fm>=S.faceRatio*gm;
   B.why=fm>fT?(staff?'có người cạnh giường':shake?'cả hình chuyển động (rung/đổi sáng)':headMove?'đầu cử động, không thấy tay':!handOk?'không thấy tay đi vào':fm<S.faceRatio*gm?'chuyển động lan khắp hình':'tính là cử động tay'):'';
   if(B.feat)B.feat.push(now,fm,outP,caring?1:0,covered?1:0,rp,gm,hmv,rpr);
@@ -584,12 +587,13 @@ function tickBed(B){
   const stillMs=now-B.lastPos;
   if(!caring&&stillMs>P(B,'stillMin')*60000)fire(B,'still');
   if(B.mode==='cam')actAdd(B,bm,faceOn?dt:0);
-  B.cur={act,bm,stillMs,mean,staff,caring,fA,shake};
+  B.cur={act,bm,stillMs,mean,staff,caring,fA,shake,fm,fT,handOk,ringSmall};
   const w=Date.now();if(w-B.lastMeter>500){B.lastMeter=w;meters(B)}
 }
 function meters(B){
   const c=B.cur;if(!c)return;const m=s=>B.q('[data-m='+s+']');
-  m('face').textContent=c.act.toFixed(1)+'/'+c.fA+'s';m('bed').textContent=c.bm.toFixed(1)+'%';
+  m('face').textContent=c.act.toFixed(1)+'/'+c.fA+'s';m('bed').textContent=(c.bm<1?'Yên':c.bm<5?'Nhẹ':'Nhiều')+' '+c.bm.toFixed(1)+'%';
+  const dg=B.q('.diag');if(dg)dg.textContent='Vùng mặt: '+(c.fm>c.fT?'đang cử động ('+c.fm.toFixed(0)+'%)':'yên')+' · Tay: '+(c.ringSmall?'không kiểm tra (mặt sát mép hình)':c.handOk?'có tay gần mặt':'chưa thấy tay')+(B.why&&B.why!=='tính là cử động tay'?' · Bỏ qua: '+B.why:B.why?' · Đang đếm cử động tay':'');
   m('still').textContent=Math.floor(c.stillMs/60000)+'ph'+p2(Math.floor(c.stillMs/1000)%60);m('light').textContent=Math.round(c.mean);
   if(c.caring)chip(B,'Đang chăm sóc – còn '+Math.ceil((B.careUntil-clk(B))/60000)+' ph','warn');
   else if(c.staff)chip(B,'Có người cạnh giường – tạm hoãn','warn');
