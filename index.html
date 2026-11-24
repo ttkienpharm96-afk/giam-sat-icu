@@ -136,6 +136,7 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
       <label class="chk"><input type="checkbox" data-b="sound">Âm báo</label>
       <label class="chk"><input type="checkbox" data-b="rec">Tự lưu clip khi cảnh báo</label>
       <label class="chk"><input type="checkbox" data-b="night">Tăng cường hình ban đêm</label>
+      <label class="chk"><input type="checkbox" data-b="handRing">Chỉ báo khi thấy tay đi vào vùng mặt</label>
       <label class="chk"><input type="checkbox" data-b="autoStaff">Tự hoãn cảnh báo khi có người cạnh giường</label>
       <label class="chk"><input type="checkbox" data-b="autoNight">Tự đổi ngưỡng ban đêm</label>
     </div>
@@ -256,6 +257,7 @@ const GRP={def:'Mặc định',sed:'An thần sâu',awake:'Tỉnh / cai máy'};
 const PROF0={sed:{faceThr:4,faceActive:2,faceCd:2,headThr:15,stillMin:120},awake:{faceThr:8,faceActive:5,faceCd:5,headThr:20,stillMin:180}};
 const DEF={diffThr:25,faceThr:6,faceWin:10,faceActive:3,faceCd:2,posThr:10,headThr:15,stillMin:120,lightThr:40,
   careMin:15,repeatMin:2,vol:70,staffThr:3,tolSec:30,keepDays:7,
+  handRing:true,ringThr:0.8,ringPres:3,ringWin:3,gmMax:12,faceRatio:2,headMoveThr:8,
   showMask:true,blur:false,sound:true,rec:true,night:true,autoStaff:true,autoNight:true,nightFrom:22,nightTo:6,nightDiff:30,nightFace:8,n:1,speed:4};
 let S;
 try{S=Object.assign({},DEF,JSON.parse(localStorage.getItem('icuMon2')||'{}'))}catch(e){S=Object.assign({},DEF)}
@@ -274,6 +276,9 @@ function P(B,k){
 
 const SETS=[['vol','Âm lượng cảnh báo (0–100)'],['repeatMin','Nhắc lại cảnh báo chưa xác nhận sau (phút)'],['careMin','Thời gian tạm dừng khi chăm sóc (phút)'],
   ['staffThr','Có người cạnh giường: % chuyển động ngoài vùng giường'],
+  ['ringThr','Tay: % chuyển động ở vùng quanh mặt để tính là có tay'],['ringPres','Tay: % vùng quanh mặt khác với lúc nằm yên để tính là có tay'],['ringWin','Tay: phải thấy tay đi vào trong vòng (giây)'],
+  ['gmMax','Bỏ qua khung hình khi cả hình chuyển động trên (%) – rung máy, đổi sáng'],['faceRatio','Vùng mặt phải chuyển động gấp (lần) mức chung của cả hình'],
+  ['headMoveThr','Coi là đầu cử động (không phải tay) khi vùng đầu ngoài mặt chuyển động trên (%)'],
   ['diffThr','Ngưỡng khác biệt điểm ảnh (0–255)'],['faceThr','Vùng mặt: % điểm ảnh chuyển động để tính là “cử động”'],
   ['faceWin','Vùng mặt: cửa sổ xét (giây)'],['faceActive','Vùng mặt: số giây cử động trong cửa sổ để cảnh báo'],
   ['faceCd','Vùng mặt: không nhắc lại trong (phút)'],['posThr','Giường: % thay đổi để tính là đổi tư thế'],
@@ -435,6 +440,10 @@ function updCare(B){const on=B.careUntil>clk(B),b=B.q('.care');b.classList.toggl
 function zr(B,z){const W=B.W,H=B.H;return[Math.max(0,Math.floor(z.x*W)),Math.max(0,Math.floor(z.y*H)),Math.min(W,Math.ceil((z.x+z.w)*W)),Math.min(H,Math.ceil((z.y+z.h)*H))]}
 function cntMask(B,z){const[x0,y0,x1,y1]=zr(B,z);let c=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++)c+=B.mask[y*B.W+x];return[c,(x1-x0)*(y1-y0)]}
 function fracDiff(B,a,b,z,thr){const[x0,y0,x1,y1]=zr(B,z);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){const i=y*B.W+x;n++;if(Math.abs(a[i]-b[i])>thr)c++}return n?c/n*100:0}
+function ringOf(f){const x0=Math.max(0,f.x-f.w*.8),x1=Math.min(1,f.x+f.w*1.8),y0=Math.max(0,f.y),y1=Math.min(1,f.y+f.h*2);return{x:x0,y:y0,w:x1-x0,h:y1-y0}}
+function inR(B,r,x,y){const[x0,y0,x1,y1]=zr(B,r);return x>=x0&&x<x1&&y>=y0&&y<y1}
+function cntEx(B,r,ex){const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;c+=B.mask[y*B.W+x]}return n?c/n*100:0}
+function cntDiffEx(B,a,b,r,ex,thr){const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;const i=y*B.W+x;if(Math.abs(a[i]-b[i])>thr)c++}return n?c/n*100:0}
 function resetRefs(B){B.prev=null;B.faceHist=[];B.lastClock=0}
 function enhance(g,W,H){
   const h=new Uint32Array(256);for(let i=0;i<g.length;i++)h[g[i]]++;
@@ -479,8 +488,14 @@ function tickBed(B){
   if(S.autoStaff&&outP>S.staffThr)B.staffUntil=now+20000;
   const staff=now<B.staffUntil,hold=caring||staff;
   if(bm>1.5)B.lastMotion=now;
-  if(B.feat)B.feat.push(now,fm,outP,caring?1:0,covered?1:0);
-  B.faceHist.push([now,fm>fT&&!staff?dt:0]);
+  const gm=mc/(W*H)*100,rp=cntEx(B,ringOf(z.face),[z.face,z.head]),hmv=cntEx(B,z.head,[z.face]);
+  const rpr=B.ref?cntDiffEx(B,g,B.ref,ringOf(z.face),[z.face,z.head],dT):0,ringOn=rp>S.ringThr||rpr>S.ringPres;
+  if(ringOn)B.lastRing=now;
+  const shake=gm>S.gmMax,headMove=hmv>S.headMoveThr&&!ringOn,handOk=!S.handRing||now-(B.lastRing||-1e15)<=S.ringWin*1000;
+  const faceOn=fm>fT&&!staff&&!shake&&!headMove&&handOk&&fm>=S.faceRatio*gm;
+  B.why=fm>fT?(staff?'có người cạnh giường':shake?'cả hình chuyển động (rung/đổi sáng)':headMove?'đầu cử động, không thấy tay':!handOk?'không thấy tay đi vào':fm<S.faceRatio*gm?'chuyển động lan khắp hình':'tính là cử động tay'):'';
+  if(B.feat)B.feat.push(now,fm,outP,caring?1:0,covered?1:0,rp,gm,hmv,rpr);
+  B.faceHist.push([now,faceOn?dt:0]);
   while(B.faceHist.length&&B.faceHist[0][0]<now-S.faceWin*1000)B.faceHist.shift();
   const act=B.faceHist.reduce((a,h)=>a+h[1],0)/1000;
   if(!warm&&!hold&&!covered&&act>=fA){fire(B,'face');B.faceHist=[]}
@@ -497,8 +512,8 @@ function tickBed(B){
   }
   const stillMs=now-B.lastPos;
   if(!caring&&stillMs>P(B,'stillMin')*60000)fire(B,'still');
-  if(B.mode==='cam')actAdd(B,bm,fm>fT&&!staff?dt:0);
-  B.cur={act,bm,stillMs,mean,staff,caring,fA};
+  if(B.mode==='cam')actAdd(B,bm,faceOn?dt:0);
+  B.cur={act,bm,stillMs,mean,staff,caring,fA,shake};
   const w=Date.now();if(w-B.lastMeter>500){B.lastMeter=w;meters(B)}
 }
 function meters(B){
@@ -507,6 +522,8 @@ function meters(B){
   m('still').textContent=Math.floor(c.stillMs/60000)+'ph'+p2(Math.floor(c.stillMs/1000)%60);m('light').textContent=Math.round(c.mean);
   if(c.caring)chip(B,'Đang chăm sóc – còn '+Math.ceil((B.careUntil-clk(B))/60000)+' ph','warn');
   else if(c.staff)chip(B,'Có người cạnh giường – tạm hoãn','warn');
+  else if(c.shake)chip(B,'Cả hình chuyển động – giữ máy cố định','warn');
+  else if(B.why&&B.why!=='tính là cử động tay')chip(B,'Mặt cử động – bỏ qua: '+B.why,'');
   else if(B.mode==='file')chip(B,'Chấm video ×'+B.vid.playbackRate+' · '+vtf(clk(B)),'on');
   else if(c.mean<S.lightThr)chip(B,'Ánh sáng yếu','warn');
   else chip(B,'Đang giám sát'+(nightOn(B)?' · ngưỡng đêm':'')+(B.c.grp&&B.c.grp!=='def'?' · '+GRP[B.c.grp]:''),'on');
@@ -515,7 +532,7 @@ function meters(B){
 
 function saveFeat(B){
   if(!B.feat||B.feat.length<10||!B.sess)return;
-  idbPut('feat',B.sess.id,{sess:B.sess.id,name:B.sess.name,bed:B.c.name,data:new Float64Array(B.feat)}).catch(()=>{});
+  idbPut('feat',B.sess.id,{sess:B.sess.id,name:B.sess.name,bed:B.c.name,data:new Float64Array(B.feat),st:9}).catch(()=>{});
 }
 
 /* ---------- mức cử động (actigraphy) ---------- */
@@ -807,6 +824,7 @@ function drawBed(B){
     B.mctx.putImageData(im,0,0);o.imageSmoothingEnabled=false;o.drawImage(B.mc,0,0,cw,ch);
   }
   o.lineWidth=2*dpr;o.font=(12*dpr)+'px system-ui,sans-serif';
+  if(S.handRing){const rr=ringOf(B.c.zones.face);o.strokeStyle='rgba(229,72,77,.55)';o.setLineDash([3*dpr,4*dpr]);o.strokeRect(rr.x*cw,rr.y*ch,rr.w*cw,rr.h*ch)}
   for(const k of ['bed','head','face']){
     const z=B.drag&&B.drag.k===k?B.drag.z:B.c.zones[k];
     o.strokeStyle=ZC[k];o.setLineDash(k==='bed'?[6*dpr,4*dpr]:[]);o.strokeRect(z.x*cw,z.y*ch,z.w*cw,z.h*ch);
@@ -837,13 +855,14 @@ $('profTbl').addEventListener('change',e=>{const k=e.target.dataset.p;if(!k)retu
 
 /* ---------- tìm ngưỡng tối ưu (chạy lại quy tắc vùng mặt trên dữ liệu đã chấm) ---------- */
 async function allFeat(){const d=await db();return new Promise(res=>{const r=d.transaction('feat').objectStore('feat').getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>res([])})}
-function simFace(data,thr,act,cd){
+function simFace(data,thr,act,cd,st){st=st||5;let lastR=-1e15;
   const out=[],qT=[],qD=[];let head=0,sum=0,staffU=0,last=-1e15,prevT=null;const t0=data[0],win=S.faceWin*1000;
-  for(let i=0;i<data.length;i+=5){
-    const t=data[i],fm=data[i+1],op=data[i+2],car=data[i+3],cov=data[i+4];
+  for(let i=0;i<data.length;i+=st){
+    const t=data[i],fm=data[i+1],op=data[i+2],car=data[i+3],cov=data[i+4],rp=st>=8?data[i+5]:100,gm=st>=8?data[i+6]:0,hmv=st>=8?data[i+7]:0,rpr=st>=9?data[i+8]:0,ringOn=rp>S.ringThr||rpr>S.ringPres;
+    if(ringOn)lastR=t;
     const dt=prevT==null?0:Math.min(t-prevT,2000);prevT=t;
     if(S.autoStaff&&op>S.staffThr)staffU=t+20000;
-    const staff=t<staffU,v=fm>thr&&!staff?dt:0;
+    const staff=t<staffU,ok=!(gm>S.gmMax)&&!(hmv>S.headMoveThr&&!ringOn)&&(!S.handRing||t-lastR<=S.ringWin*1000)&&fm>=S.faceRatio*gm,v=fm>thr&&!staff&&ok?dt:0;
     qT.push(t);qD.push(v);sum+=v;
     while(head<qT.length&&qT[head]<t-win){sum-=qD[head];head++}
     if(t-t0<3000||car||cov||staff)continue;
@@ -859,8 +878,8 @@ $('btnOpt').addEventListener('click',async()=>{
   const fs=await allFeat();
   const sets=fs.map(f=>({f,mk:log.filter(e=>e.sess===f.sess&&e.kind==='mark'&&e.type==='face').map(e=>e.vt)})).filter(x=>x.mk.length&&x.f.data&&x.f.data.length>10);
   if(!sets.length){$('optFig').hidden=true;$('optOut').innerHTML='<p class="empty2">Chưa có video nào được chấm có dấu “Tay hướng về mặt / ống”. Hãy chấm ít nhất 1–2 giờ video (nhiều bệnh nhân) rồi phân tích lại.</p>';return}
-  const hrs=sets.reduce((a,x)=>a+(x.f.data[x.f.data.length-5]-x.f.data[0])/36e5,0),M=sets.reduce((a,x)=>a+x.mk.length,0),tol=S.tolSec*1000;
-  const run=(t,a)=>{let A=0,tp=0;for(const x of sets){const al=simFace(x.f.data,t,a,S.faceCd);A+=al.length;tp+=matchN(al,x.mk,tol)}return{t,a,A,tp,sens:tp/M,fph:hrs>0?(A-tp)/hrs:0}};
+  const hrs=sets.reduce((a,x)=>a+(x.f.data[x.f.data.length-(x.f.st||5)]-x.f.data[0])/36e5,0),M=sets.reduce((a,x)=>a+x.mk.length,0),tol=S.tolSec*1000;
+  const run=(t,a)=>{let A=0,tp=0;for(const x of sets){const al=simFace(x.f.data,t,a,S.faceCd,x.f.st);A+=al.length;tp+=matchN(al,x.mk,tol)}return{t,a,A,tp,sens:tp/M,fph:hrs>0?(A-tp)/hrs:0}};
   const pts=[];for(const t of [2,3,4,5,6,7,8,10,12,15,20])for(const a of [0.5,1,1.5,2,3,4,5,6,8])pts.push(run(t,a));
   optRes={pts,curr:run(S.faceThr,S.faceActive),M,hrs,n:sets.length,target:Math.max(0,+$('optFa').value||0)};
   renderOpt();
