@@ -116,13 +116,19 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
 .banner h2{font-size:clamp(20px,5vw,26px);line-height:1.2;margin:6px 0 4px;font-weight:750}
 .banner ul{margin:4px 0 10px;padding-left:20px;font-size:15px}
 .banner .v button{min-height:44px;font-size:15px;padding:8px 14px;background:rgba(255,255,255,.95);color:#111;border:0;font-weight:650}
-.atxt{position:absolute;left:8px;right:8px;bottom:8px;background:var(--hi);color:#fff;font-weight:700;font-size:15px;padding:8px 10px;border-radius:8px;text-align:center;pointer-events:none}
+.atxt{position:absolute;left:8px;right:8px;bottom:8px;font-size:13px!important;padding:5px 8px!important;background:var(--hi);color:#fff;font-weight:700;font-size:15px;padding:8px 10px;border-radius:8px;text-align:center;pointer-events:none}
 .atxt.mid{background:var(--mid);color:#1a1100}
+.talert{background:var(--hi);color:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px;animation:pulse 1.2s ease-in-out infinite}
+.talert.mid{background:var(--mid);color:#1a1100}
+.talert b{display:block;font-size:clamp(17px,4.5vw,20px);line-height:1.25;margin:2px 0 4px}
+.talert .tt{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:600;opacity:.9}
+.talert ul{margin:2px 0 8px;padding-left:18px;font-size:14px}
+.talert .v button{min-height:40px;font-size:14px;background:rgba(255,255,255,.95);color:#111;border:0;font-weight:650}
+.zmsg{font-size:13px;color:var(--mute);margin:6px 2px 0}
 .note{font-size:13px;color:var(--mute);padding:0 max(3vw,14px) max(24px,env(safe-area-inset-bottom));max-width:1100px}
 </style>
 </head>
 <body>
-<div class="banner" id="banner" role="alertdialog" aria-live="assertive" hidden></div>
 <header>
   <h1>Giám sát giường ICU</h1>
   <span class="pill" id="pill">Chưa có giường nào đang giám sát</span>
@@ -148,7 +154,7 @@ input[type=datetime-local]{font:inherit;font-size:15px;min-height:38px;padding:6
       <label class="chk"><input type="checkbox" data-b="rec">Tự lưu clip khi cảnh báo</label>
       <label class="chk"><input type="checkbox" data-b="night">Tăng cường hình ban đêm</label>
       <label class="chk"><input type="checkbox" data-b="handRing">Chỉ báo khi thấy tay đi vào vùng mặt</label>
-      <label class="chk"><input type="checkbox" data-b="autoStaff">Tự hoãn cảnh báo khi có người cạnh giường</label>
+      <label class="chk"><input type="checkbox" data-b="autoZone">Tự nhận diện vùng khi bật camera</label>
       <label class="chk"><input type="checkbox" data-b="autoNight">Tự đổi ngưỡng ban đêm</label>
     </div>
     <div class="vbox" id="fileRow" hidden>
@@ -268,10 +274,11 @@ const GRP={def:'Mặc định',sed:'An thần sâu',awake:'Tỉnh / cai máy'};
 const PROF0={sed:{faceThr:4,faceActive:2,faceCd:2,headThr:15,stillMin:120},awake:{faceThr:8,faceActive:5,faceCd:5,headThr:20,stillMin:180}};
 const DEF={diffThr:25,faceThr:6,faceWin:10,faceActive:3,faceCd:2,posThr:10,headThr:15,stillMin:120,lightThr:40,
   careMin:15,repeatMin:2,vol:70,staffThr:3,tolSec:30,keepDays:7,
-  handRing:true,ringThr:0.8,ringPres:3,ringWin:3,gmMax:12,faceRatio:2,headMoveThr:8,
+  autoZone:true,handRing:true,ringThr:0.8,ringPres:3,ringWin:3,gmMax:12,faceRatio:2,headMoveThr:8,
   showMask:true,blur:false,sound:true,rec:true,night:true,autoStaff:true,autoNight:true,nightFrom:22,nightTo:6,nightDiff:30,nightFace:8,n:1,speed:4};
 let S;
 try{S=Object.assign({},DEF,JSON.parse(localStorage.getItem('icuMon2')||'{}'))}catch(e){S=Object.assign({},DEF)}
+S.autoStaff=false;
 S.prof={sed:Object.assign({},PROF0.sed,(S.prof||{}).sed),awake:Object.assign({},PROF0.awake,(S.prof||{}).awake)};
 S.beds=[0,1,2,3].map(i=>{const b=Object.assign(BDEF(i),(S.beds||[])[i]||{});b.zones=Object.assign(ZDEF(),b.zones||{});return b});
 try{const old=JSON.parse(localStorage.getItem('icuMon')||'null');if(old&&!localStorage.getItem('icuMon2')){if(old.bed)S.beds[0].name=old.bed;if(old.zones)S.beds[0].zones=Object.assign(ZDEF(),old.zones)}}catch(e){}
@@ -286,7 +293,6 @@ function P(B,k){
 }
 
 const SETS=[['vol','Âm lượng cảnh báo (0–100)'],['repeatMin','Nhắc lại cảnh báo chưa xác nhận sau (phút)'],['careMin','Thời gian tạm dừng khi chăm sóc (phút)'],
-  ['staffThr','Có người cạnh giường: % chuyển động ngoài vùng giường'],
   ['ringThr','Tay: % chuyển động ở vùng quanh mặt để tính là có tay'],['ringPres','Tay: % vùng quanh mặt khác với lúc nằm yên để tính là có tay'],['ringWin','Tay: phải thấy tay đi vào trong vòng (giây)'],
   ['gmMax','Bỏ qua khung hình khi cả hình chuyển động trên (%) – rung máy, đổi sáng'],['faceRatio','Vùng mặt phải chuyển động gấp (lần) mức chung của cả hình'],
   ['headMoveThr','Coi là đầu cử động (không phải tay) khi vùng đầu ngoài mặt chuyển động trên (%)'],
@@ -382,11 +388,13 @@ $('btnDir').addEventListener('click',async()=>{
 
 /* ---------- ô giường ---------- */
 const TILE=`<div class="th"><input class="bn" aria-label="Tên giường"><span class="chip">Chưa có nguồn hình</span></div>
+<div class="talert" role="alert" aria-live="assertive" hidden></div>
 <div class="stage"><video playsinline muted></video><canvas></canvas><div class="atxt" hidden></div><div class="empty">Bật camera hoặc mở video để bắt đầu.<br>Kéo chuột trên hình để vẽ vùng.</div></div>
+<p class="zmsg" hidden></p>
 <div class="mm"><div>Mặt<b data-m="face">–</b></div><div>Giường<b data-m="bed">–</b></div><div>Bất động<b data-m="still">–</b></div><div>Độ sáng<b data-m="light">–</b></div></div>
 <div class="row sm"><select class="cs" aria-label="Chọn camera"><option value="">Camera mặc định</option></select><button class="pri bc">Bật camera</button>
 <label class="btn">Chấm video<input type="file" accept="video/*" hidden></label><button class="bs">Dừng</button><button class="br">● Ghi</button></div>
-<div class="row sm"><button class="care">Đang chăm sóc</button><button class="turn">Đã xoay trở</button><button class="bref">Đặt lại mốc</button><label class="chk"><input type="checkbox" class="evd">Có EVD</label><select class="grp" aria-label="Nhóm ngưỡng">${Object.entries(GRP).map(([k,v])=>`<option value="${k}">Nhóm: ${v}</option>`).join('')}</select></div>
+<div class="row sm"><button class="care">Đang chăm sóc</button><button class="turn">Đã xoay trở</button><button class="bauto">Tự nhận diện vùng</button><button class="bref">Đặt lại mốc</button><label class="chk"><input type="checkbox" class="evd">Có EVD</label><select class="grp" aria-label="Nhóm ngưỡng">${Object.entries(GRP).map(([k,v])=>`<option value="${k}">Nhóm: ${v}</option>`).join('')}</select></div>
 <details class="sc"><summary>Ghi RASS / CPOT</summary><div class="row sm">
 <select class="rass" aria-label="RASS"><option value="">RASS</option>${[4,3,2,1,0,-1,-2,-3,-4,-5].map(v=>`<option value="${v}">RASS ${v>0?'+'+v:v}</option>`).join('')}</select>
 <select class="cpot" aria-label="CPOT"><option value="">CPOT</option>${[0,1,2,3,4,5,6,7,8].map(v=>`<option value="${v}">CPOT ${v}</option>`).join('')}</select>
@@ -416,6 +424,7 @@ function makeBed(i){
     updCare(B);
   });
   q('.turn').addEventListener('click',()=>{if(!B.running)return;B.lastPos=clk(B);resetRefs(B);info(B,'Điều dưỡng xác nhận đã xoay trở','turn');renderReview()});
+  q('.bauto').addEventListener('click',()=>{if(B.running)autoZones(B,true)});
   q('.bref').addEventListener('click',()=>{if(!B.running)return;resetRefs(B);info(B,'Đặt lại mốc so sánh thủ công')});
   q('.bsave').addEventListener('click',()=>{
     const r=q('.rass').value,p=q('.cpot').value;if(r===''&&p==='')return;
@@ -455,6 +464,56 @@ function ringOf(f){const x0=Math.max(0,f.x-f.w*.8),x1=Math.min(1,f.x+f.w*1.8),y0
 function inR(B,r,x,y){const[x0,y0,x1,y1]=zr(B,r);return x>=x0&&x<x1&&y>=y0&&y<y1}
 function cntEx(B,r,ex){const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;c+=B.mask[y*B.W+x]}return n?c/n*100:0}
 function cntDiffEx(B,a,b,r,ex,thr){const[x0,y0,x1,y1]=zr(B,r);let c=0,n=0;for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){if(ex.some(e=>inR(B,e,x,y)))continue;n++;const i=y*B.W+x;if(Math.abs(a[i]-b[i])>thr)c++}return n?c/n*100:0}
+/* tự nhận diện vùng bằng màu da + hình dạng (không AI) */
+function findFace(B){
+  const v=B.vid;if(v.readyState<2||!v.videoWidth)return null;
+  const W=160,H=Math.max(40,Math.round(160*v.videoHeight/v.videoWidth)),c=B.lc||(B.lc=document.createElement('canvas'));c.width=W;c.height=H;
+  const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(v,0,0,W,H);const d=x.getImageData(0,0,W,H).data,N=W*H,sk=new Uint8Array(N);
+  for(let i=0,j=0;i<N;i++,j+=4){const r=d[j],g=d[j+1],b=d[j+2],Y=.299*r+.587*g+.114*b,Cr=128+.5*r-.4187*g-.0813*b,Cb=128-.1687*r-.3313*g+.5*b;
+    sk[i]=Y>40&&Cr>=135&&Cr<=178&&Cb>=78&&Cb<=128&&r>g&&r>b&&r-b>12?1:0}
+  const lab=new Int32Array(N),st=[];let id=0,best=null;
+  for(let i=0;i<N;i++){
+    if(!sk[i]||lab[i])continue;id++;lab[i]=id;st.push(i);let n=0,x0=W,y0=H,x1=0,y1=0;
+    while(st.length){const k=st.pop(),px=k%W,py=(k-px)/W;n++;if(px<x0)x0=px;if(px>x1)x1=px;if(py<y0)y0=py;if(py>y1)y1=py;
+      if(px>0&&sk[k-1]&&!lab[k-1]){lab[k-1]=id;st.push(k-1)}if(px<W-1&&sk[k+1]&&!lab[k+1]){lab[k+1]=id;st.push(k+1)}
+      if(py>0&&sk[k-W]&&!lab[k-W]){lab[k-W]=id;st.push(k-W)}if(py<H-1&&sk[k+W]&&!lab[k+W]){lab[k+W]=id;st.push(k+W)}}
+    const bw=x1-x0+1,bh=y1-y0+1,area=n/N,fill=n/(bw*bh),asp=bw/bh;
+    if(area<.003||area>.25||asp<.45||asp>2.2||fill<.4)continue;
+    const cx=(x0+x1+1)/2/W,cy=(y0+y1+1)/2/H,score=Math.sqrt(area)*fill*Math.max(.1,1-Math.abs(Math.log(asp/.85)))*Math.max(.2,1.3-Math.hypot(cx-.5,cy-.4));
+    if(!best||score>best.score)best={x:x0/W,y:y0/H,w:bw/W,h:bh/H,score};
+  }
+  return best;
+}
+const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+function zonesFrom(f){
+  const face={x:cl(f.x-f.w*.15,0,1),y:cl(f.y-f.h*.12,0,1)};face.w=Math.min(1-face.x,f.w*1.3);face.h=Math.min(1-face.y,f.y+f.h*1.1-face.y);
+  const head={x:cl(f.x-f.w*.3,0,1),y:cl(f.y-f.h*.45,0,1)};head.w=Math.min(1-head.x,f.w*1.6);head.h=Math.min(1-head.y,f.y+f.h*1.18-head.y);
+  const fcx=f.x+f.w/2,fcy=f.y+f.h/2,dx=.5-fcx,dy=.5-fcy;let bed;
+  if(Math.abs(dy)>=Math.abs(dx)*.8){const bw=Math.min(1,Math.max(f.w*3.6,.35)),bx=cl(fcx-bw/2,0,1-bw);
+    if(dy>=0){const y0=cl(f.y-f.h*.6,0,1);bed={x:bx,y:y0,w:bw,h:1-y0}}else{const y1=cl(f.y+f.h*1.6,0,1);bed={x:bx,y:0,w:bw,h:y1}}}
+  else{const bh=Math.min(1,Math.max(f.h*3.6,.35)),by=cl(fcy-bh/2,0,1-bh);
+    if(dx>=0){const x0=cl(f.x-f.w*.6,0,1);bed={x:x0,y:by,w:1-x0,h:bh}}else{const x1=cl(f.x+f.w*1.6,0,1);bed={x:0,y:by,w:x1,h:bh}}}
+  return{face,head,bed};
+}
+function zmsg(B,t){const m=B.q('.zmsg');m.textContent=t;m.hidden=!t}
+async function autoZones(B,manual,tries){
+  if(!B.running)return;tries=tries||0;zmsg(B,'Đang tự nhận diện mặt, đầu, vùng giường…');
+  const got=[];for(let i=0;i<12&&B.running&&got.length<6;i++){const f=findFace(B);if(f)got.push(f);await new Promise(r=>setTimeout(r,250))}
+  if(got.length<3){if(!manual&&tries<3&&B.running){zmsg(B,'Chưa thấy rõ mặt bệnh nhân – sẽ thử lại sau 10 giây…');setTimeout(()=>autoZones(B,false,tries+1),10000);return}zmsg(B,'Không tự tìm được mặt bệnh nhân (thiếu sáng, che mặt hoặc góc quay). Hãy kéo trên hình để vẽ vùng, hoặc bấm “Tự nhận diện vùng” để thử lại.');return}
+  const med=k=>{const a=got.map(g=>g[k]).sort((p,q)=>p-q);return a[a.length>>1]};
+  const f={x:med('x'),y:med('y'),w:med('w'),h:med('h')},z=zonesFrom(f);
+  B.c.zones=z;save();resetRefs(B);B.lastPos=clk(B);B.faceRef=f;
+  zmsg(B,'Đã tự nhận diện vùng. Nếu khung đỏ chưa ôm đúng mặt, kéo trên hình để chỉnh lại.');
+  info(B,(manual?'Tự nhận diện lại vùng':'Tự nhận diện vùng khi bật camera')+' – mặt tại '+Math.round((f.x+f.w/2)*100)+'%, '+Math.round((f.y+f.h/2)*100)+'%','zone');
+  setTimeout(()=>{const m=B.q('.zmsg');if(m.textContent.startsWith('Đã tự'))zmsg(B,'')},12000);
+}
+function relocFace(B){
+  const o=B.c.zones.face,f=findFace(B);if(!f)return;
+  const ocx=o.x+o.w/2,ocy=o.y+o.h/2,ncx=f.x+f.w/2,ncy=f.y+f.h/2,r=(f.w*f.h)/(o.w*o.h/1.6);
+  if(Math.hypot(ncx-ocx,ncy-ocy)>Math.max(o.w,o.h)*1.5||r<.4||r>2.5)return;
+  const z=zonesFrom(f);B.c.zones.face=z.face;B.c.zones.head=z.head;save();B.prev=null;B.faceHist=[];B.lastClock=0;
+  info(B,'Cập nhật vị trí mặt sau khi bệnh nhân đổi tư thế','zone');
+}
 function resetRefs(B){B.prev=null;B.faceHist=[];B.lastClock=0}
 function enhance(g,W,H){
   const h=new Uint32Array(256);for(let i=0;i<g.length;i++)h[g[i]]++;
@@ -499,10 +558,10 @@ function tickBed(B){
   if(S.autoStaff&&outP>S.staffThr)B.staffUntil=now+20000;
   const staff=now<B.staffUntil,hold=caring||staff;
   if(bm>1.5)B.lastMotion=now;
-  const gm=mc/(W*H)*100,rp=cntEx(B,ringOf(z.face),[z.face,z.head]),hmv=cntEx(B,z.head,[z.face]);
+  const gOut=outN>W*H*.05?(mc-bc)/outN*100:bm,gm=bm,rp=cntEx(B,ringOf(z.face),[z.face,z.head]),hmv=cntEx(B,z.head,[z.face]);
   const rpr=B.ref?cntDiffEx(B,g,B.ref,ringOf(z.face),[z.face,z.head],dT):0,ringOn=rp>S.ringThr||rpr>S.ringPres;
   if(ringOn)B.lastRing=now;
-  const shake=gm>S.gmMax,headMove=hmv>S.headMoveThr&&!ringOn,handOk=!S.handRing||now-(B.lastRing||-1e15)<=S.ringWin*1000;
+  const shake=gm>S.gmMax&&gOut>S.gmMax,headMove=hmv>S.headMoveThr&&!ringOn,handOk=!S.handRing||now-(B.lastRing||-1e15)<=S.ringWin*1000;
   const faceOn=fm>fT&&!staff&&!shake&&!headMove&&handOk&&fm>=S.faceRatio*gm;
   B.why=fm>fT?(staff?'có người cạnh giường':shake?'cả hình chuyển động (rung/đổi sáng)':headMove?'đầu cử động, không thấy tay':!handOk?'không thấy tay đi vào':fm<S.faceRatio*gm?'chuyển động lan khắp hình':'tính là cử động tay'):'';
   if(B.feat)B.feat.push(now,fm,outP,caring?1:0,covered?1:0,rp,gm,hmv,rpr);
@@ -516,11 +575,12 @@ function tickBed(B){
     else if(fracDiff(B,g,B.ref,FULL,dT)>60){B.ref=g;B.headRef=g;B.refMean=mean;fire(B,'cam','Camera có thể bị xê dịch – kiểm tra và vẽ lại vùng')}
     else{
       const pd=fracDiff(B,g,B.ref,z.bed,dT);
-      if(pd>S.posThr){B.ref=g;B.refMean=mean;B.lastPos=now;info(B,'Ghi nhận thay đổi tư thế ('+pd.toFixed(0)+'% vùng giường)','pos')}
+      if(pd>S.posThr){B.ref=g;B.refMean=mean;B.lastPos=now;info(B,'Ghi nhận thay đổi tư thế ('+pd.toFixed(0)+'% vùng giường)','pos');if(S.autoZone)B.relocAt=now+2000}
       const hd=fracDiff(B,g,B.headRef,z.head,dT);
       if(hd>P(B,'headThr')){B.headRef=g;if(!caring)fire(B,'head')}
     }
   }
+  if(B.relocAt&&now>=B.relocAt){B.relocAt=0;relocFace(B)}
   const stillMs=now-B.lastPos;
   if(!caring&&stillMs>P(B,'stillMin')*60000)fire(B,'still');
   if(B.mode==='cam')actAdd(B,bm,faceOn?dt:0);
@@ -571,20 +631,21 @@ function fire(B,type,title){
   if(r.lvl!=='lo'){B.el.classList.add('alarm');B.alarmT=Date.now()+15000}
   if(S.sound)beep(r.lvl);
   if(S.rec&&B.mode==='cam'&&type!=='light')clipFor(B,e);
+  if(r.lvl!=='lo'){const rc=B.el.getBoundingClientRect();if(rc.top<0||rc.top>innerHeight*.5)B.el.scrollIntoView({block:'start',behavior:'smooth'})}
 }
 function info(B,txt,type){log.push({id:++seq,t:Date.now(),vt:B.mode==='file'?clk(B):null,sess:B.sess?B.sess.id:0,bed:B.c.name,kind:'info',type:type||'info',title:txt,v:''});saveLog();renderAlerts()}
 const liveSess=()=>new Set(beds.filter(b=>b.sess).map(b=>b.sess.id));
 function renderBanner(){
   const ss=liveSess(),pend=log.filter(e=>ss.has(e.sess)&&e.kind==='alert'&&!e.v&&e.vt==null&&RULES[e.type].lvl!=='lo');
-  const bn=$('banner'),e=pend[pend.length-1];
-  if(!e){bn.hidden=true}else{
-    bn.className='banner '+RULES[e.type].lvl;bn.hidden=false;
-    bn.innerHTML=`<div class="bt"><span>⚠ ${esc(e.bed)} · ${hm(e.t)}</span><span>${pend.length>1?'+'+(pend.length-1)+' cảnh báo khác':''}</span></div>
-      <h2>${esc(e.title)}</h2><ul>${e.tips.map(t=>'<li>'+esc(t)+'</li>').join('')}</ul>
-      <div class="v"><button data-id="${e.id}" data-v="tp">Đúng – đã xử lý</button><button data-id="${e.id}" data-v="fp">Cảnh báo sai</button><button data-id="${e.id}" data-v="seen">Đã xem</button></div>`;
+  for(const B of beds){
+    const a=B.q('.atxt'),box=B.q('.talert'),mine=B.sess?pend.filter(p=>p.sess===B.sess.id):[],x=mine[mine.length-1];
+    if(!x){a.hidden=true;box.hidden=true;continue}
+    const lv=RULES[x.type].lvl;a.hidden=false;a.className='atxt '+lv;a.textContent='⚠ '+x.title;
+    box.hidden=false;box.className='talert '+lv;
+    box.innerHTML=`<div class="tt"><span>⚠ ${esc(x.bed)} · ${hm(x.t)}</span><span>${mine.length>1?'+'+(mine.length-1)+' cảnh báo khác':''}</span></div>
+      <b>${esc(x.title)}</b><ul>${x.tips.map(t=>'<li>'+esc(t)+'</li>').join('')}</ul>
+      <div class="v"><button data-id="${x.id}" data-v="tp">Đúng – đã xử lý</button><button data-id="${x.id}" data-v="fp">Cảnh báo sai</button><button data-id="${x.id}" data-v="seen">Đã xem</button></div>`;
   }
-  for(const B of beds){const a=B.q('.atxt'),x=B.sess?pend.filter(p=>p.sess===B.sess.id).pop():null;
-    if(x){a.hidden=false;a.className='atxt '+RULES[x.type].lvl;a.textContent='⚠ '+x.title}else a.hidden=true}
 }
 function renderAlerts(newId){renderBanner();
   const ss=liveSess(),items=log.filter(e=>ss.has(e.sess)).slice(-100).reverse();
@@ -792,6 +853,7 @@ function begin(B,m,name){
   if(m==='cam')rollStart(B);
   try{navigator.wakeLock&&navigator.wakeLock.request('screen').catch(()=>{})}catch(e){}
   restartLoop();updFileRow();saveLog();
+  if(S.autoZone)setTimeout(()=>autoZones(B,false),700);
   info(B,m==='cam'?'Bắt đầu giám sát bằng camera':'Bắt đầu chấm video: '+name);
   renderAlerts();renderScore();pillUpd();
 }
