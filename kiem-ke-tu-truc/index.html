@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#e7e4df">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Kiểm kê tủ">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>Kiểm kê tủ trực</title>
+<style>
+/* VOICE: clinical, calm, a working tool used standing at a cabinet
+   IDEA: the paper biên bản 11D/BV-01 turned into a tap-through checklist
+   PICTURE: the live list of lots itself, with a progress rule at the top
+   COLOUR and TYPE: stone ground, black ink, brick for discrepancies, amber for expiry; Schibsted Grotesk
+   LAYOUT: sticky header with progress + tabs, one column of lot cards, summary tables */
+:root{color-scheme:light dark;
+--bg:light-dark(#e7e4df,#171513);--panel:light-dark(#fff,#221f1c);--ink:light-dark(#151311,#efebe5);
+--mute:light-dark(#6b655d,#a39b90);--line:light-dark(#d4cfc7,#3a3530);--brick:light-dark(#c8371e,#ff6a4d);
+--amber:light-dark(#a35f00,#f0a640);--ok:light-dark(#1f5f4a,#6fcfa8);--okbg:light-dark(#e3efe9,#1b2b25);
+--diffbg:light-dark(#fbe7e2,#341c17);--chip:light-dark(#f3f1ed,#2b2724)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Schibsted Grotesk",system-ui,sans-serif;overflow-x:clip}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--brick);outline-offset:2px}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:calc(12px + env(safe-area-inset-top)) max(4vw,14px,env(safe-area-inset-right)) 0 max(4vw,14px,env(safe-area-inset-left))}
+.hrow{display:flex;gap:12px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;max-width:980px;margin:auto}
+h1{font-size:clamp(22px,4vw,32px);line-height:1.05;margin:0;font-weight:700;text-wrap:balance}
+.sub{color:var(--mute);font-size:14px}
+.tub{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:0;background:none;padding:4px 0;min-height:36px;color:var(--mute);font-size:14px;text-align:left}
+.tub .tuc{color:var(--brick);font-weight:700;white-space:nowrap}
+.prog{max-width:980px;margin:10px auto 0;height:8px;background:var(--line);border-radius:4px;overflow:hidden;display:flex}
+.prog i{display:block;height:100%}
+.stats{max-width:980px;margin:8px auto 0;display:flex;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--mute)}
+.stats b{color:var(--ink);font-variant-numeric:tabular-nums}
+.stats .r b{color:var(--brick)}.stats .a b{color:var(--amber)}
+nav{max-width:980px;margin:6px auto 0;display:flex;gap:4px;overflow-x:auto}
+nav button{flex:none;border:0;background:none;padding:10px 12px;min-height:44px;font-weight:500;color:var(--mute);border-bottom:3px solid transparent;white-space:nowrap}
+nav button[aria-selected=true]{color:var(--ink);border-color:var(--brick)}
+main{max-width:980px;margin:auto;padding:14px max(4vw,14px) 120px}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.tools input[type=search]{flex:1 1 220px;min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.btn{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-weight:500}
+.btn.pri{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.red{color:var(--brick);border-color:var(--brick)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chips button{border:1px solid var(--line);background:var(--chip);border-radius:20px;padding:6px 12px;min-height:38px;font-size:14px}
+.chips button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+h2{font-size:15px;margin:20px 0 6px;color:var(--mute);font-weight:700;display:flex;justify-content:space-between;gap:8px}
+.grp-done{font-weight:400}
+.it{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px;scroll-margin-top:190px}
+.it.ok{border-left-color:var(--ok)}.it.diff{border-left-color:var(--brick);background:var(--diffbg)}
+.it.flash{animation:fl 1.4s}
+@keyframes fl{0%,40%{box-shadow:0 0 0 4px var(--brick)}100%{box-shadow:none}}
+@media(prefers-reduced-motion:reduce){.it.flash{animation:none;box-shadow:0 0 0 4px var(--brick)}}
+.top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px}
+.nm{font-weight:700;line-height:1.25}
+.nm small{display:block;font-weight:400;color:var(--mute);font-size:13px;margin-top:2px}
+.lotbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:stretch;margin-top:8px}
+.lv{background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:5px 9px;line-height:1.2}
+.lv span{display:block;font-size:12px;color:var(--mute)}
+.lv b{font-size:18px;font-variant-numeric:tabular-nums;letter-spacing:.03em;overflow-wrap:anywhere}
+.lv.w1 b{color:var(--amber)}.lv.w2 b{color:var(--brick)}
+.lv.none b{font-size:14px;font-weight:400;color:var(--mute)}
+.vb{min-height:44px;border-radius:8px;border:1.5px solid var(--ink);background:var(--panel);color:var(--ink);font-weight:700;padding:0 10px;font-size:14px;line-height:1.15}
+.vb.ok{background:var(--okbg);color:var(--ok);border-color:var(--ok)}
+.vb.bad{background:var(--diffbg);color:var(--brick);border-color:var(--brick)}
+.cmp{width:100%;border-collapse:collapse;margin:8px 0;font-size:15px}
+.cmp td,.cmp th{padding:8px 6px;border-bottom:1px solid var(--line)}
+.cmp b{font-size:17px;letter-spacing:.03em}
+.mk{font-weight:700;white-space:nowrap}.mk.y{color:var(--ok)}.mk.n{color:var(--brick)}.mk.u{color:var(--amber)}
+.thumb{max-width:100%;max-height:220px;border-radius:8px;display:block;margin:6px auto}
+.busy{display:flex;gap:10px;align-items:center;padding:10px 0;color:var(--mute)}
+.busy i{width:18px;height:18px;border:3px solid var(--line);border-top-color:var(--brick);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(1turn)}}
+details pre{white-space:pre-wrap;font-size:12px;background:var(--chip);padding:8px;border-radius:6px;max-height:160px;overflow:auto}
+.tag{display:inline-block;font-size:12px;padding:1px 6px;border-radius:4px;background:var(--chip);color:var(--mute);margin-left:4px}
+.tag.new{background:var(--brick);color:#fff}
+.ctl{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.nums{font-size:14px;color:var(--mute);margin-right:auto;font-variant-numeric:tabular-nums;white-space:nowrap}
+.nums b{color:var(--ink)}
+.dv{font-weight:700;color:var(--brick)}.dv.ok{color:var(--ok)}
+.okb{min-height:44px;min-width:76px;border-radius:8px;border:1px solid var(--ok);background:none;color:var(--ok);font-weight:700;padding:0 10px}
+.it.ok .okb{background:var(--ok);color:var(--panel)}
+.step{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.step button{width:44px;min-height:44px;border:0;background:var(--chip);font-size:22px;line-height:1}
+.step input{width:56px;text-align:center;border:0;font-size:18px;font-weight:700;background:none;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.step input::-webkit-inner-spin-button{-webkit-appearance:none}
+.mb{min-height:44px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:none;font-size:14px}
+.mb.has{border-color:var(--amber);color:var(--amber)}
+.more{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 10px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font-size:14px}
+.more input{min-height:40px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--panel);font-size:16px}
+.more .acts{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+.empty{padding:30px;text-align:center;color:var(--mute)}
+.fab{position:fixed;right:max(4vw,14px);bottom:max(18px,env(safe-area-inset-bottom));z-index:6;display:flex;gap:8px}
+.fab .btn{box-shadow:0 4px 14px rgb(0 0 0/.25);min-height:52px;padding:0 18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.kpi b{display:block;font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi span{font-size:13px;color:var(--mute)}
+.kpi.r b{color:var(--brick)}.kpi.a b{color:var(--amber)}.kpi.g b{color:var(--ok)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:500;font-size:13px}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.card h3{margin:0 0 8px;font-size:17px}
+.note{font-size:13px;color:var(--mute)}
+.form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.form label{display:flex;flex-direction:column;font-size:13px;color:var(--mute);gap:3px}
+.form input,.form select{min-height:44px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--panel);font-size:16px;color:var(--ink)}
+.form .full{grid-column:1/-1}
+.dp{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:none;min-height:40px;padding:0 10px;font-size:14px}
+.seg button[aria-pressed=true].d{background:var(--ok);color:#fff}
+.seg button[aria-pressed=true].k{background:var(--brick);color:#fff}
+.dp input{grid-column:1/-1;min-height:38px;border:1px solid var(--line);border-radius:6px;padding:4px 8px;background:var(--panel);font-size:16px}
+dialog{border:0;border-radius:12px;padding:0;max-width:min(520px,94vw);width:100%;background:var(--panel);color:var(--ink);box-shadow:0 20px 60px rgb(0 0 0/.4)}
+dialog::backdrop{background:rgb(0 0 0/.45)}
+.dlg{padding:18px}
+.dlg h3{margin:0 0 10px;font-size:20px}
+.dlg .acts{display:flex;gap:8px;flex-direction:row-reverse;justify-content:flex-start;margin-top:14px;flex-wrap:wrap}
+.scanres{background:var(--chip);border-radius:8px;padding:10px;font-size:14px;margin:10px 0;overflow-wrap:anywhere}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;z-index:20;font-size:14px;max-width:90vw;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+@media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:8px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:2px 0;padding-inline-start:7.5em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7em;margin-inline-start:-7.5em;color:var(--mute)}.stack td:empty{display:none}.form{grid-template-columns:minmax(0,1fr)}.lotbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.lotbar .vb{grid-column:1/-1}}
+</style>
+<script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <div>
+      <h1>Kiểm kê thuốc tủ trực</h1>
+      <button class="tub" id="tuBtn" type="button"><span id="sub"></span><span class="tuc">Đổi khoa ▾</span></button>
+    </div>
+  </div>
+  <div class="prog" id="prog" aria-hidden="true"></div>
+  <div class="stats" id="stats"></div>
+  <nav role="tablist">
+    <button role="tab" data-tab="list" aria-selected="true">Kiểm kê</button>
+    <button role="tab" data-tab="sum" aria-selected="false">Tổng hợp</button>
+    <button role="tab" data-tab="info" aria-selected="false">Tổ KK &amp; ý kiến</button>
+    <button role="tab" data-tab="data" aria-selected="false">Xuất file &amp; danh mục</button>
+  </nav>
+</header>
+
+<main>
+  <section id="t-list">
+    <div class="tools">
+      <input type="search" id="q" placeholder="Tìm tên thuốc, mã, số lô…" autocomplete="off">
+      <button class="btn" id="allOk">Đủ tất cả nhóm đang lọc</button>
+    </div>
+    <div class="chips" id="chips">
+      <button data-f="all" aria-pressed="true">Tất cả</button>
+      <button data-f="todo" aria-pressed="false">Chưa kiểm</button>
+      <button data-f="diff" aria-pressed="false">Lệch</button>
+      <button data-f="exp" aria-pressed="false">Cận hạn ≤ 6 tháng</button>
+      <button data-f="nvf" aria-pressed="false">Chưa đối chiếu lô</button>
+      <button data-f="new" aria-pressed="false">Lô phát hiện thêm</button>
+    </div>
+    <div id="list"></div>
+  </section>
+  <section id="t-sum" hidden></section>
+  <section id="t-info" hidden></section>
+  <section id="t-data" hidden>
+    <div class="card">
+      <h3>Xuất biên bản</h3>
+      <p class="note">Biên bản Excel theo mẫu 11D/BV-01: 12 cột như bản giấy, có tổ kiểm kê, thời gian và ý kiến Khoa Dược. Bản HTML mở bằng trình duyệt để in khổ A4 ngang.</p>
+      <div class="tools">
+        <button class="btn pri" id="xXlsx">Tải biên bản Excel</button>
+        <button class="btn" id="xHtml">Tải bản in (HTML)</button>
+        <button class="btn" id="xCopy">Sao chép bảng</button>
+      </div>
+      <p class="note" id="dlNote"></p>
+    </div>
+    <div class="card">
+      <h3>Nạp biên bản khoa khác</h3>
+      <p class="note">Chọn file PDF biên bản kiểm kê tủ trực xuất từ phần mềm (mẫu 11D/BV-01), hoặc file Excel cùng mẫu. App tự đọc tên tủ, nhóm thuốc, mã, tên, lô, hạn dùng, cơ số, sổ sách và tạo một tủ kiểm kê riêng. Các tủ đã có vẫn giữ nguyên, chuyển qua lại bằng nút "Đổi khoa" ở đầu trang.</p>
+      <div class="form">
+        <label class="full">File PDF hoặc Excel<input type="file" id="impFile" accept=".pdf,application/pdf,.xlsx,.xls,.csv"></label>
+      </div>
+      <p class="note" id="impNote"></p>
+    </div>
+    <div class="card">
+      <h3>Đợt kiểm kê</h3>
+      <div class="tools">
+        <button class="btn" id="newRound">Bắt đầu đợt mới (giữ danh mục)</button>
+      </div>
+      <p class="note">Mỗi tủ lưu riêng trên trình duyệt của máy này sau mỗi thao tác. Nên tải biên bản Excel ngay khi kiểm xong.</p>
+    </div>
+    <div class="card">
+      <h3>Sao lưu / chuyển máy</h3>
+      <p class="note" id="offNote" style="color:var(--ok);font-weight:700">Đang tải dữ liệu để dùng offline…</p>
+      <p class="note">Lưu toàn bộ các tủ (danh mục + kết quả đang kiểm) thành một file, để mở lại trên máy khác hoặc giữ phòng khi trình duyệt xoá dữ liệu.</p>
+      <div class="tools"><button class="btn" id="bkSave">Tải file sao lưu</button><label class="btn" style="display:inline-flex;align-items:center">Khôi phục từ file<input type="file" id="bkLoad" accept=".json,application/json" hidden></label></div>
+    </div>
+  </section>
+</main>
+
+<div class="fab"><button class="btn pri" id="scanBtn">Chụp nhãn tìm lô</button></div>
+<input type="file" id="scanFile" accept="image/*" capture="environment" hidden>
+<input type="file" id="vfFile" accept="image/*" capture="environment" hidden>
+
+<dialog id="dlg"><form class="dlg" id="dlgForm" method="dialog"></form></dialog>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+if('serviceWorker' in navigator){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').then(r=>{
+  const tell=()=>{const n=document.getElementById('offNote');if(n)n.textContent='Đã sẵn sàng dùng offline trên máy này.'};
+  if(navigator.serviceWorker.controller)tell();navigator.serviceWorker.ready.then(x=>{if(navigator.onLine&&x.active)x.active.postMessage('ensure')});navigator.serviceWorker.addEventListener('controllerchange',tell);
+  r.addEventListener('updatefound',()=>{const w=r.installing;w&&w.addEventListener('statechange',()=>{if(w.state=='activated')tell()})})}).catch(()=>{})})}
+</script>
+<script src="data.js"></script>
+<script src="pdfparse.js"></script>
+<script>
+{
+const KEY='kk-tutruc-v1';
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const today=()=>{const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
+const nowLocal=()=>{const d=new Date();return `${today()}T${pad(d.getHours())}:${pad(d.getMinutes())}`};
+const norm=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+const fold=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/gi,'d').toLowerCase();
+
+function fromRows(tu,rows){
+  return {meta:{tu,ngay:today(),start:'',end:'',so:'',members:Array.from({length:5},()=>({n:'',c:''}))},
+    items:rows.map((r,i)=>({id:'r'+i,g:r[0],ma:String(r[1]),ten:r[2],dvt:r[3],lo:r[4],nuoc:r[5],hd:r[6],coso:+r[7]||0,ss:+r[8]||0,tt:null,hv:0,note:'',added:false})),
+    dp:DP_ITEMS.map(()=>({r:'',note:''}))};
+}
+const KEY2='kk-tutruc-multi-v1';let DB=null,S;
+try{DB=JSON.parse(localStorage.getItem(KEY2)||'null')}catch(e){DB=null}
+if(!DB||!DB.tus||!DB.tus[DB.cur]){let old=null;try{old=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
+  DB={cur:'t0',tus:{t0:old&&Array.isArray(old.items)?old:fromRows(SAMPLE.tu,SAMPLE.rows)}}}
+S=DB.tus[DB.cur];
+const save=()=>{DB.tus[DB.cur]=S;try{localStorage.setItem(KEY2,JSON.stringify(DB))}catch(e){toast('Bộ nhớ trình duyệt đầy – hãy xoá bớt tủ cũ')}};
+
+let tab='list',filt='all',q='';const open=new Set();
+
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),2600)}
+
+function parseD(s){const m=String(s||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?new Date(+m[3],m[2]-1,+m[1]):null}
+function monthsLeft(it){const d=parseD(it.hd);if(!d)return null;const ref=new Date(S.meta.ngay||today());return (d-ref)/(30.44*864e5)}
+function expLvl(it){const m=monthsLeft(it);if(m==null)return 0;if(m<=3)return 2;if(m<=6)return 1;return 0}
+function status(it){if(it.tt==null)return 'todo';return it.tt===it.ss?'ok':'diff'}
+
+function stats(){
+  const n=S.items.length,done=S.items.filter(i=>i.tt!=null).length,diff=S.items.filter(i=>status(i)=='diff').length;
+  const exp=S.items.filter(i=>expLvl(i)>0).length,hv=S.items.reduce((a,i)=>a+(+i.hv||0),0);
+  const lots=S.items.filter(i=>i.lo).length,vf=S.items.filter(i=>i.lo&&i.vf=='ok').length;
+  return {n,done,diff,exp,hv,ok:done-diff,lots,vf};
+}
+function renderHead(){
+  const s=stats();
+  $('#sub').textContent=`${S.meta.tu} · ${S.meta.ngay.split('-').reverse().join('/')}`;
+  const w=x=>(s.n?x/s.n*100:0).toFixed(2)+'%';
+  $('#prog').innerHTML=`<i style="width:${w(s.ok)};background:var(--ok)"></i><i style="width:${w(s.diff)};background:var(--brick)"></i>`;
+  $('#stats').innerHTML=`<span>Đã kiểm <b>${s.done}/${s.n}</b></span><span class="r">Lệch <b>${s.diff}</b></span><span class="a">Cận hạn <b>${s.exp}</b></span><span>Đã đối chiếu lô <b>${s.vf}/${s.lots}</b></span><span>Hỏng/vỡ <b>${s.hv}</b></span>`;
+}
+
+function card(it){
+  const st=status(it),lv=expLvl(it),d=it.tt==null?'':it.tt-it.ss;
+  const dTxt=it.tt==null?'':d===0?'<span class="dv ok">Khớp</span>':`<span class="dv">${d>0?'+':''}${d}</span>`;
+  const hasMore=(+it.hv>0)||it.note;
+  return `<article class="it ${st}" data-id="${it.id}" id="c-${it.id}">
+  <div class="nm">${esc(it.ten)}${it.added?'<span class="tag new">Lô mới</span>':''}<small>Mã ${esc(it.ma)} · ${esc(it.dvt)}${it.nuoc?' · '+esc(it.nuoc):''}</small></div>
+  <div class="lotbar"><div class="lv${it.lo?'':' none'}"><span>Số lô (sổ sách)</span><b>${it.lo?esc(it.lo):'Chưa có lô'}</b></div>
+  <div class="lv w${lv}${it.hd?'':' none'}"><span>Hạn dùng</span><b>${it.hd?esc(it.hd):'—'}</b></div>
+  ${it.lo?`<button type="button" class="vb ${it.vf||''}" data-a="vf">${it.vf=='ok'?'Lô, HD đúng':it.vf=='bad'?'Lô/HD lệch':'Chụp đối chiếu'}</button>`:''}</div>
+  <div class="ctl"><span class="nums">Cơ số <b>${it.coso}</b> · Sổ sách <b>${it.ss}</b> ${dTxt}</span>
+  <button class="okb" data-a="ok" type="button">Đủ ${it.ss}</button>
+  <div class="step"><button type="button" data-a="dec" aria-label="Giảm">−</button><input data-f="tt" inputmode="numeric" pattern="[0-9]*" aria-label="Thực tế" value="${it.tt??''}" placeholder="–"><button type="button" data-a="inc" aria-label="Tăng">+</button></div>
+  <button class="mb${hasMore?' has':''}" data-a="more" type="button" aria-expanded="${open.has(it.id)}">Ghi chú</button></div>
+  ${open.has(it.id)?`<div class="more"><span>Hỏng/vỡ</span><input data-f="hv" inputmode="numeric" value="${+it.hv||''}" placeholder="0">
+  <span>Ghi chú</span><input data-f="note" value="${esc(it.note)}" placeholder="VD: lô khác sổ sách, đã báo ĐD trưởng">
+  <div class="acts"><button class="btn" type="button" data-a="addlot">Thêm lô khác của thuốc này</button>${it.added?'<button class="btn red" type="button" data-a="del">Xoá dòng này</button>':''}</div></div>`:''}
+  </article>`;
+}
+function visible(it){
+  if(q){const f=fold(q),nq=norm(q);if(!(fold(it.ten).includes(f)||it.ma==q.trim()||(nq&&norm(it.lo).includes(nq))))return false}
+  if(filt=='todo')return it.tt==null;
+  if(filt=='diff')return status(it)=='diff';
+  if(filt=='exp')return expLvl(it)>0;
+  if(filt=='new')return it.added;
+  if(filt=='nvf')return !!it.lo&&it.vf!='ok';
+  return true;
+}
+function renderList(){
+  const groups=[];const map=new Map();
+  for(const it of S.items){if(!visible(it))continue;if(!map.has(it.g)){map.set(it.g,[]);groups.push(it.g)}map.get(it.g).push(it)}
+  $('#list').innerHTML=groups.length?groups.map(g=>{const arr=map.get(g),all=S.items.filter(i=>i.g==g),dn=all.filter(i=>i.tt!=null).length;
+    return `<h2><span>${esc(g)}</span><span class="grp-done">${dn}/${all.length}</span></h2>${arr.map(card).join('')}`}).join('')
+    :S.items.length?'<div class="empty">Không có dòng nào khớp bộ lọc.</div>':'<div class="empty"><p>Chưa có danh mục thuốc cho tủ này.</p><button class="btn pri" type="button" id="firstImp">Nạp PDF biên bản kiểm kê</button></div>';
+}
+function refreshCard(it){const el=document.getElementById('c-'+it.id);if(el)el.outerHTML=card(it);renderHead();save()}
+function byId(id){return S.items.find(i=>i.id==id)}
+function touchStart(){if(!S.meta.start){S.meta.start=nowLocal()}}
+
+$('#list').addEventListener('click',e=>{
+  const b=e.target.closest('[data-a]');if(!b)return;const it=byId(b.closest('.it').dataset.id);if(!it)return;
+  const a=b.dataset.a;
+  if(a=='ok'){it.tt=it.ss;touchStart()}
+  else if(a=='inc'){it.tt=(it.tt??it.ss)+1;touchStart()}
+  else if(a=='dec'){it.tt=Math.max(0,(it.tt??it.ss)-1);touchStart()}
+  else if(a=='more'){open.has(it.id)?open.delete(it.id):open.add(it.id)}
+  else if(a=='addlot'){return addLotDlg(it)}
+  else if(a=='vf'){vfId=it.id;return $('#vfFile').click()}
+  else if(a=='del'){S.items=S.items.filter(x=>x!==it);save();renderList();renderHead();return}
+  refreshCard(it);
+});
+$('#list').addEventListener('change',e=>{
+  const f=e.target.dataset.f;if(!f)return;const it=byId(e.target.closest('.it').dataset.id);
+  if(f=='tt'){const v=e.target.value.trim();it.tt=v===''?null:Math.max(0,parseInt(v)||0);touchStart()}
+  if(f=='hv')it.hv=Math.max(0,parseInt(e.target.value)||0);
+  if(f=='note'){it.note=e.target.value;save();renderHead();return}
+  refreshCard(it);
+});
+$('#list').addEventListener('keydown',e=>{if(e.key=='Enter'&&e.target.matches('input'))e.target.blur()});
+
+$('#q').addEventListener('input',e=>{q=e.target.value;renderList()});
+$('#chips').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;filt=b.dataset.f;
+  for(const c of $('#chips').children)c.setAttribute('aria-pressed',c===b);renderList()});
+$('#allOk').addEventListener('click',()=>{
+  const arr=S.items.filter(i=>visible(i)&&i.tt==null);if(!arr.length)return toast('Không còn dòng chưa kiểm trong bộ lọc này');
+  confirmDlg(`Ghi "Đủ" (thực tế = sổ sách) cho ${arr.length} dòng chưa kiểm đang hiển thị?`,()=>{arr.forEach(i=>i.tt=i.ss);touchStart();save();renderList();renderHead();toast(`Đã ghi đủ ${arr.length} dòng`)});
+});
+
+/* ---------- tabs ---------- */
+document.querySelector('nav').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(!b)return;tab=b.dataset.tab;
+  for(const x of document.querySelectorAll('nav button'))x.setAttribute('aria-selected',x===b);
+  for(const t of ['list','sum','info','data'])$('#t-'+t).hidden=t!=tab;
+  $('.fab').style.display=tab=='list'?'':'none';
+  if(tab=='sum')renderSum();if(tab=='info')renderInfo();if(tab=='list')renderList();window.scrollTo(0,0)});
+
+/* ---------- summary ---------- */
+function byMa(){const m=new Map();for(const it of S.items){if(!m.has(it.ma))m.set(it.ma,{ma:it.ma,ten:it.ten,dvt:it.dvt,coso:it.coso,ss:0,tt:0,done:true});const r=m.get(it.ma);r.ss+=it.ss;r.tt+=it.tt??it.ss;if(it.tt==null)r.done=false}return [...m.values()]}
+function renderSum(){
+  const s=stats(),diff=S.items.filter(i=>status(i)=='diff'),exp=S.items.filter(i=>expLvl(i)>0).sort((a,b)=>monthsLeft(a)-monthsLeft(b));
+  const under=byMa().filter(r=>r.tt<r.coso),hv=S.items.filter(i=>+i.hv>0),added=S.items.filter(i=>i.added);
+  const tbl=(head,rows,empty)=>rows.length?`<table class="stack"><thead><tr>${head}</tr></thead><tbody>${rows.join('')}</tbody></table>`:`<p class="note">${empty}</p>`;
+  $('#t-sum').innerHTML=`
+  <div class="kpis"><div class="kpi g"><b>${s.done}/${s.n}</b><span>dòng đã kiểm</span></div><div class="kpi r"><b>${s.diff}</b><span>dòng lệch sổ sách</span></div>
+  <div class="kpi a"><b>${s.exp}</b><span>lô cận hạn ≤ 6 tháng</span></div><div class="kpi r"><b>${under.length}</b><span>thuốc dưới cơ số</span></div></div>
+  ${s.done<s.n?`<p class="note">Còn ${s.n-s.done} dòng chưa kiểm; phần dưới cơ số đang tạm tính các dòng đó theo sổ sách.</p>`:''}
+  <div class="card"><h3>Chênh lệch sổ sách – thực tế</h3>${tbl('<th>Thuốc</th><th>Lô</th><th class="n">Sổ sách</th><th class="n">Thực tế</th><th class="n">Chênh</th>',
+    diff.map(i=>`<tr><td>${esc(i.ten)}${i.added?' <span class="tag new">Lô mới</span>':''}</td><td>${esc(i.lo)}</td><td class="n">${i.ss}</td><td class="n">${i.tt}</td><td class="n dv">${i.tt-i.ss>0?'+':''}${i.tt-i.ss}</td></tr>`),'Chưa có dòng nào lệch.')}</div>
+  <div class="card"><h3>Dưới cơ số – cần bù</h3>${tbl('<th>Mã</th><th>Thuốc</th><th class="n">Cơ số</th><th class="n">Thực tế</th><th class="n">Cần bù</th>',
+    under.map(r=>`<tr><td>${esc(r.ma)}</td><td>${esc(r.ten)}</td><td class="n">${r.coso}</td><td class="n">${r.tt}</td><td class="n dv">${r.coso-r.tt} ${esc(r.dvt)}</td></tr>`),'Tất cả thuốc đủ cơ số.')}</div>
+  <div class="card"><h3>Cận hạn dùng</h3>${tbl('<th>Thuốc</th><th>Lô</th><th>Hạn dùng</th><th class="n">Còn</th>',
+    exp.map(i=>{const m=monthsLeft(i);return `<tr><td>${esc(i.ten)}</td><td>${esc(i.lo)}</td><td>${esc(i.hd)}</td><td class="n" style="color:var(--${expLvl(i)==2?'brick':'amber'})">${m<0?'Đã hết hạn':Math.floor(m)+' tháng'}</td></tr>`}),'Không có lô nào hết hạn trong 6 tháng tới.')}</div>
+  ${hv.length?`<div class="card"><h3>Hỏng / vỡ</h3>${tbl('<th>Thuốc</th><th>Lô</th><th class="n">SL</th><th>Ghi chú</th>',hv.map(i=>`<tr><td>${esc(i.ten)}</td><td>${esc(i.lo)}</td><td class="n">${i.hv}</td><td>${esc(i.note)}</td></tr>`),'')}</div>`:''}
+  ${added.length?`<div class="card"><h3>Lô phát hiện thêm (không có trong sổ sách)</h3>${tbl('<th>Thuốc</th><th>Lô</th><th>Hạn dùng</th><th class="n">Thực tế</th>',added.map(i=>`<tr><td>${esc(i.ten)}</td><td>${esc(i.lo)}</td><td>${esc(i.hd)}</td><td class="n">${i.tt??''}</td></tr>`),'')}</div>`:''}`;
+}
+
+/* ---------- info ---------- */
+function renderInfo(){
+  const m=S.meta;
+  $('#t-info').innerHTML=`<div class="card"><h3>Thông tin đợt kiểm kê</h3><div class="form">
+  <label class="full">Đã kiểm kê tại<input data-m="tu" value="${esc(m.tu)}"></label>
+  <label>Ngày biên bản<input type="date" data-m="ngay" value="${esc(m.ngay)}"></label><label>Số biên bản<input data-m="so" value="${esc(m.so)}"></label>
+  <label>Bắt đầu<input type="datetime-local" data-m="start" value="${esc(m.start)}"></label><label>Kết thúc<input type="datetime-local" data-m="end" value="${esc(m.end)}"></label>
+  <div class="full"><button class="btn" type="button" id="endNow">Kết thúc kiểm kê lúc này</button></div></div>
+  <p class="note">Giờ bắt đầu tự ghi khi bấm dòng đầu tiên.</p></div>
+  <div class="card"><h3>Tổ kiểm kê</h3><div class="form">${m.members.map((p,i)=>`<label>${i+1}. Họ tên<input data-mem="${i}" data-k="n" value="${esc(p.n)}"></label><label>Chức danh<input data-mem="${i}" data-k="c" value="${esc(p.c)}" list="cdList"></label>`).join('')}</div>
+  <datalist id="cdList"><option value="Dược sĩ"><option value="Dược sĩ lâm sàng"><option value="Điều dưỡng trưởng"><option value="Điều dưỡng"><option value="Bác sĩ"><option value="Trưởng khoa"></datalist></div>
+  <div class="card"><h3>Ý kiến Khoa Dược</h3>${DP_ITEMS.map((t,i)=>{const r=S.dp[i]||{r:'',note:''};return `<div class="dp"><span>${esc(t)}</span>
+  <div class="seg" data-dp="${i}"><button type="button" class="d" data-v="d" aria-pressed="${r.r=='d'}">Đạt</button><button type="button" class="k" data-v="k" aria-pressed="${r.r=='k'}">Không đạt</button></div>
+  ${r.r=='k'||r.note?`<input data-dpn="${i}" value="${esc(r.note)}" placeholder="Ghi chú">`:''}</div>`}).join('')}
+  <div class="tools" style="margin-top:10px"><button class="btn" type="button" id="dpAll">Đạt tất cả mục chưa chọn</button></div></div>`;
+}
+$('#t-info').addEventListener('change',e=>{const t=e.target;
+  if(t.dataset.m){S.meta[t.dataset.m]=t.value;renderHead()}
+  if(t.dataset.mem){S.meta.members[+t.dataset.mem][t.dataset.k]=t.value}
+  if(t.dataset.dpn){S.dp[+t.dataset.dpn].note=t.value}
+  save()});
+$('#t-info').addEventListener('click',e=>{
+  if(e.target.id=='endNow'){S.meta.end=nowLocal();if(!S.meta.start)S.meta.start=S.meta.end;save();renderInfo();return}
+  if(e.target.id=='dpAll'){S.dp.forEach(r=>{if(!r.r)r.r='d'});save();renderInfo();return}
+  const b=e.target.closest('.seg button');if(!b)return;const i=+b.parentElement.dataset.dp;
+  S.dp[i].r=S.dp[i].r==b.dataset.v?'':b.dataset.v;save();renderInfo();
+  if(S.dp[i].r=='k')setTimeout(()=>document.querySelector(`[data-dpn="${i}"]`)?.focus(),0);
+});
+
+/* ---------- dialogs ---------- */
+const dlg=$('#dlg'),df=$('#dlgForm');
+function confirmDlg(msg,fn){df.innerHTML=`<h3>Xác nhận</h3><p></p><div class="acts"><button class="btn pri" value="yes">Đồng ý</button><button class="btn" value="no">Huỷ</button></div>`;
+  df.querySelector('p').textContent=msg;dlg.onclose=()=>{if(dlg.returnValue=='yes')fn()};dlg.returnValue='';dlg.showModal()}
+function addLotDlg(base,pre={}){
+  const opts=[...new Map(S.items.map(i=>[i.ma,i])).values()];
+  df.innerHTML=`<h3>Thêm lô phát hiện thêm</h3><p class="note">Dùng khi trong tủ có lô không có trong sổ sách (VD: điều dưỡng lấy khác lô bác sĩ chọn). Dòng mới có sổ sách = 0.</p>
+  <div class="form">
+  <label class="full">Thuốc<select id="nlMa">${opts.map(i=>`<option value="${esc(i.ma)}"${base&&i.ma==base.ma?' selected':''}>${esc(i.ten)} (mã ${esc(i.ma)})</option>`).join('')}</select></label>
+  <label>Số lô<input id="nlLo" required value="${esc(pre.lo||'')}" autocapitalize="characters"></label>
+  <label>Hạn dùng (dd/mm/yyyy)<input id="nlHd" value="${esc(pre.hd||'')}" placeholder="31/12/2028" inputmode="numeric"></label>
+  <label>Số lượng thực tế<input id="nlTt" inputmode="numeric" value="1"></label>
+  <label>Ghi chú<input id="nlNote" value="Lô không có trong sổ sách"></label></div>
+  <div class="acts"><button class="btn pri" value="yes">Thêm</button><button class="btn" value="no" formnovalidate>Huỷ</button></div>`;
+  dlg.returnValue='';
+  dlg.onclose=()=>{if(dlg.returnValue!='yes')return;
+    const src=S.items.find(i=>i.ma==$('#nlMa').value);const lo=$('#nlLo').value.trim().toUpperCase();if(!lo)return;
+    let hd=$('#nlHd').value.trim();const m=hd.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);if(m)hd=`${pad(m[1])}/${pad(m[2])}/${m[3].length==2?'20'+m[3]:m[3]}`;
+    const it={...src,id:'n'+Date.now(),lo,hd,ss:0,tt:Math.max(0,parseInt($('#nlTt').value)||0),hv:0,note:$('#nlNote').value,added:true};
+    const idx=S.items.lastIndexOf(S.items.filter(i=>i.ma==src.ma).pop());S.items.splice(idx+1,0,it);touchStart();save();
+    renderList();renderHead();flash(it.id);toast('Đã thêm lô '+lo)};
+  dlg.showModal();
+}
+function flash(id){const el=document.getElementById('c-'+id);if(!el)return;el.scrollIntoView({block:'center',behavior:'smooth'});el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash')}
+
+/* ---------- scan ---------- */
+function loadScript(src){return new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
+function findLot(lo){const n=norm(lo);if(!n)return [];let hit=S.items.filter(i=>norm(i.lo)==n);if(!hit.length)hit=S.items.filter(i=>i.lo&&(norm(i.lo).includes(n)||n.includes(norm(i.lo)))&&norm(i.lo).length>=4);return hit}
+function scanDlg(info){
+  const hits=info?(info.hits||findLot(info.lo)):[];
+  df.innerHTML=`<h3>Kết quả quét</h3>
+  ${info&&!info.hits.length?'<div class="scanres">Đã đọc chữ trên nhãn nhưng không thấy số lô nào trong danh mục. Gõ số lô bên dưới hoặc chụp lại gần hơn.</div>':''}${info&&info.hits.length?`<div class="scanres">Số lô đọc được: <b>${esc(info.lo)}</b>${info.hd?` · HD ${esc(info.hd)}`:''}</div>`:''}${!info?'<div class="scanres">Không đọc được chữ trong ảnh. Chụp gần hơn, đủ sáng, chữ nằm ngang – hoặc gõ số lô bên dưới.</div>':''}
+  <div id="hitBox"></div>
+  <div class="form"><label class="full">Tìm theo số lô (gõ tay)<input id="manLo" value="${esc(info?.lo||'')}" autocapitalize="characters"></label></div>
+  <div class="acts"><button class="btn pri" type="button" id="goFind">Tìm</button><button class="btn" type="button" id="goAdd">Thêm thành lô mới</button><button class="btn" value="no">Đóng</button></div>`;
+  const showHits=h=>{$('#hitBox').innerHTML=h.length?h.map(i=>`<p><b>${esc(i.ten)}</b><br>Lô ${esc(i.lo)} · HD ${esc(i.hd)} · Sổ sách ${i.ss}${info?.hd&&i.hd&&info.hd!=i.hd&&norm(i.lo)==norm(info.lo)?' <span class="dv">– HD trên lọ khác sổ sách</span>':''}</p><button class="btn pri" type="button" data-jump="${i.id}">Đến dòng này</button>`).join(''):(info||$('#manLo').value?'<p class="note">Không có lô này trong danh mục. Nếu thuốc có trong tủ, bấm "Thêm thành lô mới".</p>':'')};
+  showHits(hits);
+  $('#manLo').addEventListener('keydown',e=>{if(e.key=='Enter'){e.preventDefault();showHits(findLot($('#manLo').value))}});
+  df.onclick=e=>{const j=e.target.closest('[data-jump]');if(j){dlg.close();goTo(j.dataset.jump)}
+    if(e.target.id=='goFind')showHits(findLot($('#manLo').value));
+    if(e.target.id=='goAdd'){const lo=$('#manLo').value;dlg.close();df.onclick=null;addLotDlg(null,{lo,hd:info?.hd})}};
+  dlg.onclose=()=>{df.onclick=null};dlg.returnValue='';dlg.showModal();
+}
+function goTo(id){filt='all';q='';$('#q').value='';for(const c of $('#chips').children)c.setAttribute('aria-pressed',c.dataset.f=='all');open.add(id);renderList();setTimeout(()=>flash(id),50)}
+$('#scanBtn').addEventListener('click',()=>$('#scanFile').click());
+$('#scanFile').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;toast('Đang đọc chữ trên nhãn…');
+  try{const txt=await ocrAll(f,t=>S.items.some(i=>norm(i.lo).length>=4&&lotIn(t,i.lo)));
+    const hits=S.items.filter(i=>norm(i.lo).length>=4&&lotIn(txt,i.lo));
+    const ds=findDates(txt);scanDlg({lo:hits[0]?.lo||'',hd:ds.best?fmtD(ds.best):'',ocr:true,hits})}
+  catch(err){scanDlg(null)}});
+
+/* ---------- OCR + đối chiếu lô/HD ---------- */
+let vfId=null,OCRW=null;
+const CONF={O:'0',Q:'0',I:'1',S:'5',B:'8',Z:'2'};
+const canon=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/[OQISBZ]/g,c=>CONF[c]);
+function lotIn(text,lot){
+  const L=canon(lot);if(!L)return false;
+  if(L.length<4)return String(text||'').toUpperCase().split(/[^A-Z0-9]+/).some(t=>canon(t)==L);
+  return canon(text).includes(L);
+}
+const LOT_KW=/(?:SO\s*LO\s*SX|SO\s*LO|LO\s*SX|LSX|L\.S\.X|LOT\s*N[O0]\.?|LOT|BATCH\s*N[O0]\.?|BATCH|B\.\s*N[O0]\.?|CH\.?\s*-?\s*B\.?|LOTE|S\.?\s*L\.?(?=\s*[:.])|LO(?=\s*[:.#]))\s*[.:#\-]?\s*/g;
+function lev(a,b){const m=a.length,n=b.length;let p=Array.from({length:n+1},(_,j)=>j);for(let i=1;i<=m;i++){const c=[i];for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]==b[j-1]?0:1));p=c}return p[n]}
+const shape=s=>String(s).toUpperCase().replace(/[A-Z]/g,'A').replace(/\d/g,'9');
+function lotCands(text){
+  const T=fold(text).toUpperCase(),kw=[],all=[];
+  const clean=x=>x.replace(/^[\-\/.]+|[\-\/.]+$/g,'');
+  const bad=x=>x.length<2||x.length>16||!/\d/.test(x)||/^\d{12,}$/.test(x)||/^(VD|VN|GC|QLSP|QLDB|SDK|SĐK|GTIN|REG)/.test(x)||/^\d+(MG|ML|MCG|IU|UI|G|KG|L|%)$/.test(x)||/^\d{1,2}[\/\-.]\d{1,2}([\/\-.]\d{2,4})?$/.test(x)||/^\d{4}[\/\-.]\d{1,2}/.test(x);
+  for(const m of T.matchAll(LOT_KW)){
+    const rest=T.slice(m.index+m[0].length);const tok=clean((rest.match(/^\s*([A-Z0-9][A-Z0-9\-\/.]*)/)||[])[1]||'');
+    if(tok&&!bad(tok))kw.push(tok);
+  }
+  for(const raw of T.split(/[^A-Z0-9\-\/.]+/)){const t=clean(raw);if(t&&!bad(t))all.push(t)}
+  return {kw:[...new Set(kw)],all:[...new Set(all)]};
+}
+function analyzeLot(text,it){
+  const L=canon(it.lo);
+  if(lotIn(text,it.lo))return {lotOK:true,lo:it.lo};
+  const same=S.items.filter(i=>i.ma==it.ma&&i!==it&&i.lo);
+  const other=same.find(i=>lotIn(text,i.lo));
+  if(other)return {lotOK:false,lo:other.lo,otherId:other.id};
+  const {kw,all}=lotCands(text);
+  const score=c=>{const d=lev(canon(c),L);return d*10+(shape(c)==shape(it.lo)?0:4)+(c.length==it.lo.length?0:2)};
+  const pick=arr=>arr.slice().sort((a,b)=>score(a)-score(b))[0];
+  const kb=kw.length?pick(kw):null;
+  const ab=all.length?pick(all):null;
+  const best=kb||ab;if(!best)return {lotOK:null,lo:''};
+  const d=lev(canon(best),L);
+  if(L.length>=5&&d==1)return {lotOK:'near',lo:best};
+  if(kb)return {lotOK:false,lo:kb};
+  if(d<=Math.floor(L.length/2)||shape(best)==shape(it.lo))return {lotOK:false,lo:best};
+  return {lotOK:null,lo:''};
+}
+const MON={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+function findDates(text){
+  let t=fold(text).toUpperCase().replace(/(?<=\d)[OQ]|[OQ](?=\d)/g,'0').replace(/(?<=\d)[IL|]|[IL|](?=\d)/g,'1');
+  const out=[];
+  const add=(y,m,d,idx)=>{y=+y;if(y<100)y+=2000;m=+m;d=d==null?null:+d;
+    if(y<2020||y>2045||m<1||m>12||(d!=null&&(d<1||d>31)))return;
+    const pre=t.slice(Math.max(0,idx-14),idx);
+    out.push({y,m,d,exp:/EXP|HSD|H\.?\s?D\b|HAN|USE|EX\b|BEST|VAL|CAD|SCAD|VERW|BB\b/.test(pre),mfg:/MFG|MFD|NSX|N\.?S\.?X|NGAY\s*SX|\bSX|MANUF|PROD|DOM|HERG|FAB/.test(pre)})};
+  for(const x of t.matchAll(/(?<!\d)(\d{1,2})[.\/\- ](\d{1,2})[.\/\- ](\d{4}|\d{2})(?!\d)/g))add(x[3],x[2],x[1],x.index);
+  for(const x of t.matchAll(/(?<!\d)(20\d\d)[.\/\-](\d{1,2})(?:[.\/\-](\d{1,2}))?(?!\d)/g))add(x[1],x[2],x[3]??null,x.index);
+  for(const x of t.matchAll(/(?<![\d.\/\-])(\d{1,2})[.\/\-](20\d\d|\d\d)(?![\d.\/\-])/g))add(x[2],x[1],null,x.index);
+  for(const x of t.matchAll(/(?:(\d{1,2})[ .\/\-]?)?(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[ .\/\-]*(20\d\d|\d\d)(?!\d)/g))add(x[3],MON[x[2]],x[1]??null,x.index);
+  const key=o=>o.y*10000+o.m*100+(o.d||0);
+  const cand=out.filter(o=>o.exp).length?out.filter(o=>o.exp):out.filter(o=>!o.mfg).length?out.filter(o=>!o.mfg):out;
+  const best=cand.sort((a,b)=>key(b)-key(a))[0]||null;
+  return {all:out,best};
+}
+const fmtD=o=>o?(o.d?`${pad(o.d)}/${pad(o.m)}/${o.y}`:`${pad(o.m)}/${o.y}`):'';
+function dateMatch(dates,hd){const e=parseD(hd);if(!e)return null;
+  return dates.all.find(o=>o.y==e.getFullYear()&&o.m==e.getMonth()+1&&(!o.d||o.d==e.getDate()))||null}
+async function getOCR(){
+  if(OCRW)return OCRW;
+  if(!window.Tesseract)await loadScript('tess/tesseract.min.js');
+  const emb=id=>document.getElementById(id)?.textContent;
+  if(emb('tess-core')){
+    const wrap=emb('tess-eng')+'\n'+emb('tess-core')+`\nconst rf=self.fetch.bind(self);self.fetch=(u,o)=>String(u).endsWith('eng.traineddata.gz')?Promise.resolve(new Response(Uint8Array.from(atob(self.ENG_B64),c=>c.charCodeAt(0)))):rf(u,o);\n`+emb('tess-worker');
+    const wurl=URL.createObjectURL(new Blob([wrap],{type:'text/javascript'}));
+    OCRW=await Tesseract.createWorker('eng',1,{workerPath:wurl,corePath:'x/tesseract-core-simd-lstm.wasm.js',langPath:'x',workerBlobURL:false,cacheMethod:'none',gzip:true});
+    await OCRW.setParameters({tessedit_pageseg_mode:'11'});return OCRW;
+  }
+  const base=new URL('tess/',location.href).href;
+  const wrap=`const B=${JSON.stringify(base)};importScripts(B+'eng-data.js');const rf=self.fetch.bind(self);
+self.fetch=(u,o)=>String(u).endsWith('eng.traineddata.gz')?Promise.resolve(new Response(Uint8Array.from(atob(self.ENG_B64),c=>c.charCodeAt(0)))):rf(u,o);
+importScripts(B+'worker.min.js');`;
+  const wurl=URL.createObjectURL(new Blob([wrap],{type:'text/javascript'}));
+  OCRW=await Tesseract.createWorker('eng',1,{workerPath:wurl,corePath:base,langPath:base.replace(/\/$/,''),workerBlobURL:false,cacheMethod:'none',gzip:true});
+  await OCRW.setParameters({tessedit_pageseg_mode:'11'});
+  return OCRW;
+}
+async function loadImg(file){const url=URL.createObjectURL(file);const img=new Image();img.src=url;await img.decode();return {img,url}}
+function prep(img,rot){
+  const sc=Math.min(1,1500/Math.max(img.naturalWidth,img.naturalHeight))*(Math.max(img.naturalWidth,img.naturalHeight)<1000?1.8:1);
+  const w=Math.round(img.naturalWidth*sc),h=Math.round(img.naturalHeight*sc);
+  const c=document.createElement('canvas');const sw=rot%180?h:w,sh=rot%180?w:h;c.width=sw;c.height=sh;
+  const x=c.getContext('2d');x.translate(sw/2,sh/2);x.rotate(rot*Math.PI/180);x.drawImage(img,-w/2,-h/2,w,h);
+  const d=x.getImageData(0,0,sw,sh),p=d.data,hist=new Uint32Array(256);
+  for(let i=0;i<p.length;i+=4){const g=(p[i]*.3+p[i+1]*.59+p[i+2]*.11)|0;p[i]=g;hist[g]++}
+  let lo=0,hi=255,acc=0,n=p.length/4;for(;lo<255&&(acc+=hist[lo])<n*.02;lo++);acc=0;for(;hi>0&&(acc+=hist[hi])<n*.02;hi--);
+  const k=255/Math.max(1,hi-lo);for(let i=0;i<p.length;i+=4){const g=Math.max(0,Math.min(255,(p[i]-lo)*k));p[i]=p[i+1]=p[i+2]=g}
+  x.setTransform(1,0,0,1,0,0);x.putImageData(d,0,0);return c;
+}
+async function ocrAll(file,stop){
+  const w=await getOCR();const {img,url}=await loadImg(file);let acc='';
+  try{for(const rot of [0,90,270]){
+      const r=await Promise.race([w.recognize(prep(img,rot)),new Promise((_,no)=>setTimeout(()=>no({timeout:true,message:'timeout'}),30000))])
+        .catch(async e=>{if(e&&e.timeout){try{await OCRW.terminate()}catch(x){}OCRW=null}throw e});
+      acc+=r.data.text+'\n';if(stop&&stop(acc))break}}
+  finally{URL.revokeObjectURL(url)}
+  return acc;
+}
+function fileToDataURL(file){return new Promise(ok=>{const r=new FileReader();r.onload=()=>ok(r.result);r.readAsDataURL(file)})}
+async function thumbOf(file){const {img,url}=await loadImg(file);const sc=Math.min(1,600/Math.max(img.naturalWidth,img.naturalHeight));
+  const c=document.createElement('canvas');c.width=img.naturalWidth*sc;c.height=img.naturalHeight*sc;c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);return c.toDataURL('image/jpeg',.8)}
+function vfRender(it,st){
+  const mk=v=>v===true?'<span class="mk y">Khớp</span>':v===false?'<span class="mk n">Khác</span>':v=='near'?'<span class="mk u">Gần giống – xem ảnh</span>':'<span class="mk u">Chưa đọc được</span>';
+  df.innerHTML=`<h3>Đối chiếu lô, hạn dùng</h3><div class="nm">${esc(it.ten)}</div>
+  ${st.thumb?`<img class="thumb" src="${st.thumb}" alt="Ảnh vừa chụp">`:''}
+  ${st.busy?`<div class="busy"><i></i><span>${esc(st.busy)}</span></div>`:`
+  <table class="cmp"><thead><tr><th></th><th>Sổ sách</th><th>Trên lọ</th><th></th></tr></thead><tbody>
+  <tr><td>Số lô</td><td><b>${esc(it.lo)}</b></td><td><b>${esc(st.lo||'–')}</b></td><td>${mk(st.lotOK)}</td></tr>
+  <tr><td>Hạn dùng</td><td><b>${esc(it.hd||'–')}</b></td><td><b>${esc(st.hd||'–')}</b></td><td>${mk(st.hdOK)}</td></tr></tbody></table>
+  <p class="note">Kết quả đọc chữ có thể sai với chữ dập nổi hoặc in phun – hãy nhìn lại ảnh.</p>
+  ${st.lotOK===true&&st.hdOK===true?'<p><b style="color:var(--ok)">Lô và hạn dùng khớp – đã ghi nhận.</b></p>':''}
+  ${st.otherId?`<p><b style="color:var(--brick)">Lọ này là lô ${esc(st.lo)} – lô khác của cùng thuốc, đang ở thẻ khác trong danh sách.</b></p>`:''}
+  ${st.lotOK=='near'?'<p class="note">Chỉ lệch 1 ký tự so với sổ sách – thường do đọc nhầm. Nhìn ảnh rồi bấm Xác nhận đúng nếu đúng lô.</p>':''}
+  ${st.err?`<p class="note" style="color:var(--brick)">${esc(st.err)}</p>`:''}
+  ${st.text?`<details><summary class="note">Chữ đọc được</summary><pre>${esc(st.text)}</pre></details>`:''}`}
+  <div class="acts">
+  ${st.busy?'<button class="btn" value="no">Huỷ</button>':`
+  ${st.lotOK===true&&st.hdOK===true?'<button class="btn pri" value="no">Xong</button>':`<button class="btn${st.lotOK===false||st.hdOK===false?'':' pri'}" type="button" data-v="ok">Xác nhận đúng</button>`}
+  ${st.lotOK===false||st.hdOK===false?'<button class="btn red" type="button" data-v="bad">Ghi nhận lệch</button><button class="btn" type="button" data-v="add">Thêm thành lô mới</button>':''}
+  ${st.otherId?'<button class="btn" type="button" data-v="jump">Đến thẻ lô đó</button>':''}
+  <button class="btn" type="button" data-v="again">Chụp lại</button>`}</div>`;
+}
+$('#vfFile').addEventListener('change',async e=>{
+  const f=e.target.files[0];e.target.value='';const it=byId(vfId);if(!f||!it)return;
+  const st={thumb:await thumbOf(f).catch(()=>''),busy:'Đang đọc chữ trên nhãn (5–15 giây)…'};let alive=true;
+  vfRender(it,st);dlg.returnValue='';dlg.onclose=()=>{alive=false;df.onclick=null};dlg.showModal();
+  df.onclick=ev=>{const b=ev.target.closest('[data-v]');if(!b)return;const v=b.dataset.v;
+    if(v=='ok'){it.vf='ok';it.vfTxt='';refreshCard(it);dlg.close();toast('Đã ghi nhận lô, HD đúng')}
+    if(v=='bad'){it.vf='bad';it.vfTxt=[st.lo&&'lô '+st.lo,st.hd&&'HD '+st.hd].filter(Boolean).join(', ');refreshCard(it);dlg.close();toast('Đã ghi nhận lệch lô/HD')}
+    if(v=='add'){dlg.close();setTimeout(()=>addLotDlg(it,{lo:st.lo,hd:st.hd}),0)}
+    if(v=='again'){dlg.close();vfId=it.id;$('#vfFile').click()}
+    if(v=='jump'){dlg.close();goTo(st.otherId)}};
+  {
+    try{const txt=await ocrAll(f,t=>lotIn(t,it.lo)&&!!dateMatch(findDates(t),it.hd));if(!alive)return;
+      st.src='ocr';st.text=txt.trim();const ds=findDates(txt),dm=dateMatch(ds,it.hd);
+      Object.assign(st,analyzeLot(txt,it));
+      if(dm){st.hdOK=true;st.hd=fmtD(dm)}else{st.hd=fmtD(ds.best);st.hdOK=ds.best?false:null}
+      if(st.otherId){const o=byId(st.otherId);if(o&&dateMatch(ds,o.hd))st.hd=o.hd}
+    }catch(err){if(!alive)return;st.src='ocr';st.lotOK=null;st.hdOK=null;st.err=err&&err.timeout?'Đọc chữ quá lâu nên đã dừng. Chụp lại gần hơn, chỉ lấy vùng in lô/HD, hoặc so bằng mắt với ảnh.':'Bộ đọc chữ gặp lỗi trên máy này. Hãy chụp lại, hoặc so bằng mắt với ảnh rồi bấm Xác nhận đúng / Ghi nhận lệch.';st.text=String(err&&err.message||err||'')}}
+  st.busy='';
+  if(st.lotOK===true&&st.hdOK===true){it.vf='ok';it.vfTxt='';refreshCard(it)}
+  vfRender(it,st);
+});
+/* ---------- export ---------- */
+const COLS=['Số TT','Mã kỹ thuật','Tên thuốc, nồng độ, hàm lượng','Đơn vị','Số kiểm soát','Nước sản xuất','Hạn dùng','Cơ số','Sổ sách','Thực tế','Hỏng/vỡ','Ghi chú'];
+const fmtDT=v=>{if(!v)return '… giờ …, ngày … tháng … năm …';const d=new Date(v);return `${pad(d.getHours())} giờ ${pad(d.getMinutes())}, ngày ${pad(d.getDate())} tháng ${pad(d.getMonth()+1)} năm ${d.getFullYear()}`};
+function tableRows(){const out=[];let g=null,n=0;for(const it of S.items){if(it.g!==g){g=it.g;n=0;out.push({g})}n++;
+  out.push({r:[n,it.ma,it.ten,it.dvt,it.lo,it.nuoc,it.hd,it.coso,it.ss,it.tt??'',+it.hv||(it.tt!=null?0:''),[it.added?'Lô phát hiện thêm':'',it.vf=='bad'?'Lô/HD trên lọ khác sổ sách'+(it.vfTxt?': '+it.vfTxt:''):'',it.note].filter(Boolean).join('; ')]})}return out}
+function dpRows(){return DP_ITEMS.map((t,i)=>{const r=S.dp[i]||{};return [t,r.r=='d'?'X':'',r.r=='k'?'X':'',r.note||'']})}
+let DL=null;
+async function saveFile(filename,data){
+  if(!DL&&navigator.canShare&&/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)&&'ontouchend' in document){
+    try{const file=new File([data instanceof Blob?data:new Blob([data])],filename,{type:filename.endsWith('.xlsx')?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':filename.endsWith('.json')?'application/json':'text/html'});
+      if(navigator.canShare({files:[file]})){await navigator.share({files:[file],title:filename});return}}catch(e){if(e&&e.name=='AbortError')return}}
+  if(!DL){try{const b=data instanceof Blob?data:new Blob([data]);const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);toast('Đã tải '+filename)}
+    catch(e){$('#dlNote').textContent='Không tải được file. Dùng "Sao chép bảng" rồi dán vào Excel.'}return}
+  try{await DL.save({filename,data});toast('Đã tải '+filename)}catch(e){if(e&&e.code=='declined')return;
+    $('#dlNote').textContent=e&&e.code=='host_unavailable'?'Ứng dụng này không lưu được file. Mở trang trên trình duyệt hoặc máy tính để tải, hoặc dùng "Sao chép bảng".':'Không tải được file ('+(e&&e.code||'lỗi')+').'}
+}
+const fname=ext=>`Bien_ban_kiem_ke_${fold(S.meta.tu).replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,40)}_${S.meta.ngay}.${ext}`;
+$('#xXlsx').addEventListener('click',async()=>{
+  try{if(!window.XLSX)await loadScript('xlsx.full.min.js').catch(()=>loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'))}catch(e){return toast('Không tải được thư viện Excel – kiểm tra mạng')}
+  const m=S.meta,A=[];const merges=[];const R=()=>A.length;
+  A.push(['BỆNH VIỆN ĐẠI HỌC Y DƯỢC TP.HCM','','','','','','','','','','MS: 11D/BV-01']);
+  A.push(['KHOA DƯỢC','','','','','','','','','','Số: '+(m.so||'')]);
+  merges.push({s:{r:R(),c:0},e:{r:R(),c:11}});A.push(['BIÊN BẢN KIỂM KÊ THUỐC TỦ TRỰC']);
+  merges.push({s:{r:R(),c:0},e:{r:R(),c:11}});A.push(['Ngày '+m.ngay.split('-').reverse().join('/')]);
+  A.push(['- Tổ kiểm kê gồm có:']);m.members.forEach((p,i)=>A.push([`${i+1}. ${p.n}`,'','','','Chức danh: '+p.c]));
+  A.push(['- Đã kiểm kê tại: '+m.tu]);A.push([`- Từ ${fmtDT(m.start)} đến ${fmtDT(m.end)}`]);A.push(['- Kết quả như sau:']);
+  A.push(COLS);A.push(COLS.map((_,i)=>i+1));
+  for(const x of tableRows()){if(x.g){merges.push({s:{r:R(),c:0},e:{r:R(),c:11}});A.push([x.g])}else A.push(x.r)}
+  A.push([]);A.push(['Ý KIẾN KHOA DƯỢC:']);A.push(['Nội dung','','','','Đạt','Không đạt','Ghi chú']);
+  dpRows().forEach(r=>{merges.push({s:{r:R(),c:0},e:{r:R(),c:3}});A.push([r[0],'','','',r[1],r[2],r[3]])});
+  A.push([]);A.push(['TỔ KIỂM KÊ (ký, ghi rõ họ tên)','','','','','','','','ĐẠI DIỆN KHOA DƯỢC']);
+  const ws=XLSX.utils.aoa_to_sheet(A);ws['!merges']=merges;
+  ws['!cols']=[5,8,42,9,13,12,11,7,8,8,8,24].map(w=>({wch:w}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Bien ban');
+  const sum=[['Mã','Tên thuốc','Cơ số','Thực tế','Cần bù']].concat(byMa().filter(r=>r.tt<r.coso).map(r=>[r.ma,r.ten,r.coso,r.tt,r.coso-r.tt]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sum),'Can bu co so');
+  const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});saveFile(fname('xlsx'),new Uint8Array(buf));
+});
+$('#xHtml').addEventListener('click',()=>{
+  const m=S.meta,e=esc;
+  const rows=tableRows().map(x=>x.g?`<tr><td colspan="12" class="g">${e(x.g)}</td></tr>`:`<tr>${x.r.map((v,i)=>`<td${[0,7,8,9,10].includes(i)?' class="c"':''}>${e(v)}</td>`).join('')}</tr>`).join('');
+  const html=`<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Biên bản kiểm kê tủ trực ${e(m.ngay)}</title><style>
+@page{size:A4 landscape;margin:12mm}body{font:12px/1.35 "Times New Roman",serif;color:#000}table{border-collapse:collapse;width:100%}td,th{border:1px solid #000;padding:3px 4px;vertical-align:top}th{font-weight:700;text-align:center}.c{text-align:center}.g{font-weight:700}.h{display:flex;justify-content:space-between}h1{text-align:center;font-size:18px;margin:6px 0 0}.ct{text-align:center}.sig{display:flex;justify-content:space-around;margin-top:24px;font-weight:700;text-align:center}.sig div{height:90px}</style></head><body>
+<div class="h"><div><b>BỆNH VIỆN ĐẠI HỌC Y DƯỢC TP.HCM</b><br><b>KHOA DƯỢC</b></div><div>MS: 11D/BV-01<br>Số: ${e(m.so)}</div></div>
+<h1>BIÊN BẢN KIỂM KÊ THUỐC TỦ TRỰC</h1><p class="ct"><b>Ngày ${e(m.ngay.split('-').reverse().join('/'))}</b></p>
+<p>- Tổ kiểm kê gồm có:</p>${m.members.map((p,i)=>`<div>${i+1}. ${e(p.n)||'................................................'} &nbsp;&nbsp; Chức danh: ${e(p.c)||'..............................'}</div>`).join('')}
+<p>- Đã kiểm kê tại: <b>${e(m.tu)}</b><br>- Từ ${e(fmtDT(m.start))} đến ${e(fmtDT(m.end))}<br>- Kết quả như sau:</p>
+<table><thead><tr><th rowspan="2">Số TT</th><th rowspan="2">Mã kỹ thuật</th><th rowspan="2">Tên thuốc, nồng độ, hàm lượng</th><th rowspan="2">Đơn vị</th><th rowspan="2">Số kiểm soát</th><th rowspan="2">Nước sản xuất</th><th rowspan="2">Hạn dùng</th><th colspan="3">Số lượng</th><th rowspan="2">Hỏng/vỡ</th><th rowspan="2">Ghi chú</th></tr><tr><th>Cơ số</th><th>Sổ sách</th><th>Thực tế</th></tr>
+<tr>${COLS.map((_,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>
+<p><b>Ý KIẾN KHOA DƯỢC:</b></p><table><thead><tr><th>Nội dung</th><th>Đạt</th><th>Không đạt</th><th>Ghi chú</th></tr></thead><tbody>${dpRows().map(r=>`<tr><td>${e(r[0])}</td><td class="c">${r[1]}</td><td class="c">${r[2]}</td><td>${e(r[3])}</td></tr>`).join('')}</tbody></table>
+<div class="sig"><div>TỔ KIỂM KÊ<br><i style="font-weight:400">(Ký, ghi rõ họ tên)</i></div><div>ĐẠI DIỆN KHOA DƯỢC<br><i style="font-weight:400">(Ký, ghi rõ họ tên)</i></div></div>
+<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`;
+  saveFile(fname('html'),html);
+});
+$('#xCopy').addEventListener('click',async()=>{
+  const lines=[COLS.join('\t')];for(const x of tableRows())lines.push(x.g?x.g:x.r.join('\t'));
+  try{await navigator.clipboard.writeText(lines.join('\n'));toast('Đã sao chép – dán vào Excel')}catch(e){toast('Trình xem chặn sao chép')}
+});
+
+/* ---------- nạp file & nhiều tủ ---------- */
+async function parseExcel(f){
+  if(!window.XLSX)await loadScript('xlsx.full.min.js').catch(()=>loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'));
+  const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:false});
+  const A=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:false,defval:''});
+  let hr=A.findIndex(r=>r.some(c=>/ten thuoc/.test(fold(c))));if(hr<0)throw new Error('Không tìm thấy dòng tiêu đề có "Tên thuốc"');
+  const width=Math.max(...A.slice(hr,hr+3).map(r=>r.length));const head=[];
+  for(let c=0;c<width;c++)head[c]=fold([A[hr][c],A[hr+1]?.[c],A[hr+2]?.[c]].join(' '));
+  const col=re=>head.findIndex(h=>re.test(h));
+  const C={ma:col(/ma ky|ma thuoc|^ ?ma/),ten:col(/ten thuoc/),dvt:col(/don vi/),lo:col(/kiem soat|so lo|\blo\b/),nuoc:col(/nuoc/),hd:col(/han dung|hsd/),coso:col(/co so/),ss:col(/so sach/)};
+  if(C.ten<0||C.ss<0)throw new Error('Thiếu cột Tên thuốc hoặc Sổ sách');
+  let tu='';for(const r of A.slice(0,hr)){const t=r.join(' ');const m=t.match(/ki[ểe]m k[êe] t[ạa]i\s*:?\s*(.+?)(\s+T[ừu]\s|$)/i);if(m){tu=m[1].trim();break}}
+  const rows=[];let g='Chưa phân nhóm';
+  for(const r of A.slice(hr+1)){const filled=r.map(v=>String(v).trim()).filter(Boolean);if(!filled.length||filled.every(v=>/^\d+$/.test(v)))continue;
+    if(/y kien khoa duoc/.test(fold(filled.join(' '))))break;
+    const ten=String(r[C.ten]||'').trim();
+    if(filled.length<=2&&!/^\d+$/.test(filled[filled.length-1])&&String(r[C.ss]).trim()===''){g=filled.join(' ');continue}
+    if(!ten||/ten thuoc|co so|so sach/.test(fold(filled.join(' '))))continue;
+    rows.push([g,String(r[C.ma]??'').trim(),ten,String(r[C.dvt]??'').trim(),String(r[C.lo]??'').trim().replace(/\s+/g,''),String(r[C.nuoc]??'').trim(),String(r[C.hd]??'').trim(),parseInt(r[C.coso])||0,parseInt(r[C.ss])||0])}
+  return {tu,rows};
+}
+function normHd(hd){const m=String(hd||'').trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);return m?`${pad(m[1])}/${pad(m[2])}/${m[3].length==2?'20'+m[3]:m[3]}`:String(hd||'').trim()}
+async function importFile(f){
+  if(!f)return;toast('Đang đọc '+f.name+'…');$('#impNote').textContent='Đang đọc '+f.name+'…';
+  let r;
+  try{
+    if(/\.pdf$/i.test(f.name)||f.type=='application/pdf')r=await parseCabinetPDF(await f.arrayBuffer());
+    else r=await parseExcel(f);
+    r.rows.forEach(x=>{x[6]=normHd(x[6])});
+    if(!r.rows.length)throw new Error('Không tìm thấy dòng thuốc nào. File có đúng mẫu biên bản kiểm kê tủ trực (có dòng đánh số cột 1–12) không?');
+  }catch(err){$('#impNote').textContent='Lỗi: '+(err.message||err);toast('Không đọc được file');return}
+  $('#impNote').textContent='';
+  const groups=new Set(r.rows.map(x=>x[0])).size,lots=r.rows.filter(x=>x[4]).length;
+  const name=r.tu||f.name.replace(/\.\w+$/,'');
+  df.innerHTML=`<h3>Nạp biên bản mới</h3>
+  <div class="scanres">Đọc được <b>${r.rows.length}</b> dòng thuốc (${lots} dòng có số lô) trong <b>${groups}</b> nhóm.</div>
+  <div class="form"><label class="full">Tên tủ / khoa<input id="nbTu" value="${esc(name)}"></label></div>
+  <div style="max-height:200px;overflow:auto;margin-top:10px"><table><thead><tr><th>Thuốc</th><th>Lô</th><th>HD</th><th class="n">SS</th></tr></thead><tbody>
+  ${(r.rows.filter(x=>x[4]).length?r.rows.filter(x=>x[4]):r.rows).slice(0,8).map(x=>`<tr><td>${esc(x[2])}</td><td>${esc(x[4])}</td><td>${esc(x[6])}</td><td class="n">${x[8]}</td></tr>`).join('')}
+  ${r.rows.length>8?`<tr><td colspan="4" class="note">… và ${r.rows.length-8} dòng nữa</td></tr>`:''}</tbody></table></div>
+  <p class="note" id="nbWarn"></p>
+  <div class="acts"><button class="btn pri" value="yes">Tạo tủ kiểm kê</button><button class="btn" value="no" formnovalidate>Huỷ</button></div>`;
+  const warn=()=>{const ex=findTu($('#nbTu').value);$('#nbWarn').textContent=ex?`Đã có tủ "${DB.tus[ex].meta.tu}" – bấm Tạo sẽ THAY danh mục và kết quả đang kiểm của tủ đó.`:''};
+  $('#nbTu').addEventListener('input',warn);warn();
+  dlg.returnValue='';dlg.onclose=()=>{if(dlg.returnValue!='yes')return;
+    const tu=$('#nbTu').value.trim()||name;const ex=findTu(tu);const id=ex||(S.items.length?'t'+Date.now():DB.cur);
+    const prev=S;const ns=fromRows(tu,r.rows);ns.meta.members=JSON.parse(JSON.stringify(prev.meta.members||ns.meta.members));
+    DB.tus[id]=ns;switchTu(id);toast(`Đã tạo tủ ${tu} – ${r.rows.length} dòng`)};
+  dlg.showModal();
+}
+function findTu(name){const n=fold(name).replace(/\s+/g,' ').trim();return Object.keys(DB.tus).find(k=>fold(DB.tus[k].meta.tu).replace(/\s+/g,' ').trim()==n)||null}
+function switchTu(id){DB.cur=id;S=DB.tus[id];open.clear();filt='all';q='';$('#q').value='';for(const c of $('#chips').children)c.setAttribute('aria-pressed',c.dataset.f=='all');
+  save();renderHead();if(tab=='list')renderList();if(tab=='sum')renderSum();if(tab=='info')renderInfo();window.scrollTo(0,0)}
+function tuDlg(){
+  const ids=Object.keys(DB.tus);
+  df.innerHTML=`<h3>Chọn tủ / khoa</h3>
+  ${ids.map(id=>{const t=DB.tus[id],n=t.items.length,d=t.items.filter(i=>i.tt!=null).length,df_=t.items.filter(i=>i.tt!=null&&i.tt!==i.ss).length;
+    return `<div class="dp"><div><b>${esc(t.meta.tu)}</b>${id==DB.cur?' <span class="tag">Đang mở</span>':''}<div class="note">Ngày ${esc(t.meta.ngay.split('-').reverse().join('/'))} · đã kiểm ${d}/${n}${df_?` · <span style="color:var(--brick)">lệch ${df_}</span>`:''}</div></div>
+    <div style="display:flex;gap:6px">${id==DB.cur?'':`<button class="btn" type="button" data-open="${id}">Mở</button>`}<button class="btn red" type="button" data-del="${id}" aria-label="Xoá tủ">Xoá</button></div></div>`}).join('')}
+  <div class="acts"><button class="btn pri" type="button" id="tuNew">Nạp PDF / Excel khoa mới</button><button class="btn" value="no">Đóng</button></div>`;
+  df.onclick=e=>{const o=e.target.closest('[data-open]'),d=e.target.closest('[data-del]');
+    if(o){dlg.close();switchTu(o.dataset.open)}
+    if(d){const id=d.dataset.del;if(Object.keys(DB.tus).length==1){toast('Phải còn ít nhất 1 tủ');return}
+      if(d.dataset.sure){delete DB.tus[id];if(DB.cur==id)DB.cur=Object.keys(DB.tus)[0];S=DB.tus[DB.cur];save();renderHead();if(tab=='list')renderList();tuDlg()}
+      else{d.dataset.sure=1;d.textContent='Chắc chắn xoá?'}}
+    if(e.target.id=='tuNew'){dlg.close();$('#impFile').click()}};
+  dlg.onclose=()=>{df.onclick=null};dlg.returnValue='';dlg.showModal();
+}
+$('#tuBtn').addEventListener('click',tuDlg);
+$('#list').addEventListener('click',e=>{if(e.target.id=='firstImp')$('#impFile').click()});
+$('#bkSave').addEventListener('click',()=>saveFile(`Sao_luu_kiem_ke_tu_truc_${today()}.json`,JSON.stringify(DB)));
+$('#bkLoad').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const d=JSON.parse(await f.text());if(!d||!d.tus||!d.tus[d.cur])throw 0;const n=Object.keys(d.tus).length;
+    confirmDlg(`Khôi phục ${n} tủ từ file sao lưu? Tủ trùng tên trên máy này sẽ được thay; tủ khác giữ nguyên.`,()=>{
+      for(const [id,t] of Object.entries(d.tus)){const ex=findTu(t.meta.tu);DB.tus[ex||id]=t}
+      switchTu(findTu(d.tus[d.cur].meta.tu)||DB.cur);toast(`Đã khôi phục ${n} tủ`)})}
+  catch(err){toast('File sao lưu không hợp lệ')}});
+$('#impFile').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';importFile(f)});
+$('#newRound').addEventListener('click',()=>confirmDlg('Xoá kết quả đếm, ghi chú, lô phát hiện thêm và ý kiến Khoa Dược của tủ này; giữ danh mục và tổ kiểm kê?',()=>{
+  S.items=S.items.filter(i=>!i.added);S.items.forEach(i=>{i.tt=null;i.hv=0;i.note='';i.vf='';i.vfTxt=''});S.dp=DP_ITEMS.map(()=>({r:'',note:''}));
+  Object.assign(S.meta,{ngay:today(),start:'',end:'',so:''});open.clear();save();renderHead();toast('Đã bắt đầu đợt mới')}));
+
+renderHead();renderList();
+(async()=>{try{DL=await window.claude?.use?.('downloads')}catch(e){DL=null}
+  if(!DL)$('#dlNote').textContent='Nếu không tải được file, dùng "Sao chép bảng" rồi dán vào Excel.'})();
+}
+</script>
+</body>
+</html>

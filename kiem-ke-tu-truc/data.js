@@ -1,0 +1,2 @@
+const SAMPLE={tu:"Tủ mới (chưa nạp)",rows:[]};
+const DP_ITEMS = ["Danh mục tủ thuốc trực","Đúng danh mục, cơ số thuốc đã phê duyệt","Sổ theo dõi sử dụng thuốc trong tủ trực","Sổ bàn giao thuốc tủ trực","Hộp thuốc cấp cứu phản vệ/xe cấp cứu","Thường xuyên theo dõi nhiệt độ, độ ẩm","Bảo quản thuốc thường, thuốc hướng tâm thần, thuốc gây nghiện","Sắp xếp thuốc hợp lý","Thường xuyên kiểm tra hạn dùng, chất lượng cảm quan của thuốc","Theo dõi, lập biên bản khi có thuốc hỏng, vỡ (nếu có)","Danh mục thuốc LASA","Sổ theo dõi báo cáo ADR","Khác"];
