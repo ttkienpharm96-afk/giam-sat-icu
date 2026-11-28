@@ -131,6 +131,9 @@ dialog::backdrop{background:rgb(0 0 0/.45)}
 .dlg h3{margin:0 0 10px;font-size:20px}
 .dlg .acts{display:flex;gap:8px;flex-direction:row-reverse;justify-content:flex-start;margin-top:14px;flex-wrap:wrap}
 .scanres{background:var(--chip);border-radius:8px;padding:10px;font-size:14px;margin:10px 0;overflow-wrap:anywhere}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.thumbx{position:relative;width:92px}.thumbx img{width:92px;height:92px;object-fit:cover;border-radius:8px;display:block;border:1px solid var(--line)}.thumbx span{font-size:12px;color:var(--mute)}.thumbx button{position:absolute;top:2px;right:2px;width:28px;height:28px;border-radius:50%;border:0;background:rgb(0 0 0/.6);color:#fff;font-size:18px;line-height:1}
+.wl{margin:0;padding-left:18px}.wl li{margin:6px 0}.wl li.r::marker{color:var(--brick)}.wl li.r{color:var(--ink)}.wl li.a::marker{color:var(--amber)}
+.shotc{margin:10px 0}.shotc canvas{width:100%;height:auto;border-radius:8px;border:1px solid var(--line);display:block}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;z-index:20;font-size:14px;max-width:90vw;opacity:0;pointer-events:none;transition:opacity .2s}
 .toast.on{opacity:1}
 @media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:8px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:2px 0;padding-inline-start:7.5em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7em;margin-inline-start:-7.5em;color:var(--mute)}.stack td:empty{display:none}.form{grid-template-columns:minmax(0,1fr)}.lotbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.lotbar .vb{grid-column:1/-1}}
@@ -150,6 +153,7 @@ dialog::backdrop{background:rgb(0 0 0/.45)}
   <nav role="tablist">
     <button role="tab" data-tab="list" aria-selected="true">Kiểm kê</button>
     <button role="tab" data-tab="sum" aria-selected="false">Tổng hợp</button>
+    <button role="tab" data-tab="shot" aria-selected="false">Chụp tủ</button>
     <button role="tab" data-tab="info" aria-selected="false">Tổ KK &amp; ý kiến</button>
     <button role="tab" data-tab="data" aria-selected="false">Xuất file &amp; danh mục</button>
   </nav>
@@ -173,6 +177,20 @@ dialog::backdrop{background:rgb(0 0 0/.45)}
     <div id="list"></div>
   </section>
   <section id="t-sum" hidden></section>
+  <section id="t-shot" hidden>
+    <div class="card">
+      <h3>Chụp toàn bộ tủ – đánh giá sơ bộ</h3>
+      <p class="note">Chụp lần lượt từng ngăn/khay: chụp thẳng, đủ sáng, nhãn thuốc quay ra ngoài, đứng gần để chữ trên hộp đọc được. Chọn được nhiều ảnh một lần.</p>
+      <div class="tools"><label class="btn pri" style="display:inline-flex;align-items:center">Thêm ảnh ngăn tủ<input type="file" id="shotFiles" accept="image/*" multiple hidden></label>
+        <button class="btn" id="shotRun" type="button" disabled>Phân tích (không AI)</button>
+        <button class="btn" id="shotAI" type="button" hidden disabled>Đánh giá sâu bằng AI</button>
+        <button class="btn red" id="shotClear" type="button">Xoá ảnh</button></div>
+      <div class="thumbs" id="shotThumbs"></div>
+      <p class="note" id="shotNote">Chưa có ảnh.</p>
+      <p class="note" id="shotAIHint" hidden>"Đánh giá sâu bằng AI" gửi ảnh cho Claude để nhận diện thuốc, ước lượng số lượng và nhận xét cách sắp xếp – cần mạng, dùng lượt Claude của tài khoản anh.</p>
+    </div>
+    <div id="shotRes"></div><div id="shotAIRes"></div>
+  </section>
   <section id="t-info" hidden></section>
   <section id="t-data" hidden>
     <div class="card">
@@ -352,7 +370,7 @@ $('#allOk').addEventListener('click',()=>{
 /* ---------- tabs ---------- */
 document.querySelector('nav').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(!b)return;tab=b.dataset.tab;
   for(const x of document.querySelectorAll('nav button'))x.setAttribute('aria-selected',x===b);
-  for(const t of ['list','sum','info','data'])$('#t-'+t).hidden=t!=tab;
+  for(const t of ['list','sum','shot','info','data'])$('#t-'+t).hidden=t!=tab;
   $('.fab').style.display=tab=='list'?'':'none';
   if(tab=='sum')renderSum();if(tab=='info')renderInfo();if(tab=='list')renderList();window.scrollTo(0,0)});
 
@@ -589,7 +607,7 @@ async function getOCR(){
     const wrap=emb('tess-eng')+'\n'+emb('tess-core')+`\nconst rf=self.fetch.bind(self);self.fetch=(u,o)=>String(u).endsWith('eng.traineddata.gz')?Promise.resolve(new Response(Uint8Array.from(atob(self.ENG_B64),c=>c.charCodeAt(0)))):rf(u,o);\n`+emb('tess-worker');
     const wurl=URL.createObjectURL(new Blob([wrap],{type:'text/javascript'}));
     OCRW=await Tesseract.createWorker('eng',1,{workerPath:wurl,corePath:'x/tesseract-core-simd-lstm.wasm.js',langPath:'x',workerBlobURL:false,cacheMethod:'none',gzip:true});
-    await OCRW.setParameters({tessedit_pageseg_mode:'11',user_defined_dpi:'300',tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789./-:,() '});return OCRW;
+    await OCRW.setParameters({tessedit_pageseg_mode:'11',user_defined_dpi:'300',tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789./-:,()% '});return OCRW;
   }
   const base=new URL('tess/',location.href).href;
   const wrap=`const B=${JSON.stringify(base)};importScripts(B+'eng-data.js');const rf=self.fetch.bind(self);
@@ -597,13 +615,14 @@ self.fetch=(u,o)=>String(u).endsWith('eng.traineddata.gz')?Promise.resolve(new R
 importScripts(B+'worker.min.js');`;
   const wurl=URL.createObjectURL(new Blob([wrap],{type:'text/javascript'}));
   OCRW=await Tesseract.createWorker('eng',1,{workerPath:wurl,corePath:base,langPath:base.replace(/\/$/,''),workerBlobURL:false,cacheMethod:'none',gzip:true});
-  await OCRW.setParameters({tessedit_pageseg_mode:'11',user_defined_dpi:'300',tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789./-:,() '});
+  await OCRW.setParameters({tessedit_pageseg_mode:'11',user_defined_dpi:'300',tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789./-:,()% '});
   return OCRW;
 }
 async function loadImg(file){const url=URL.createObjectURL(file);const img=new Image();img.src=url;await img.decode();return {img,url}}
-function prep(img,rot,mode){
-  const big=Math.max(img.naturalWidth,img.naturalHeight),target=mode=='bin'?2000:1500;
-  const sc=Math.min(target/big,big<1000?2:1.2);
+function prep(img,rot,mode){return prepAt(img,rot,mode,mode=='bin'?2000:1500)}
+function prepAt(img,rot,mode,target){
+  const big=Math.max(img.naturalWidth,img.naturalHeight);
+  const sc=target>=2400?Math.min(target/big,big<1200?2:1):Math.min(target/big,big<1000?2:1.2);
   const w=Math.round(img.naturalWidth*sc),h=Math.round(img.naturalHeight*sc);
   const c=document.createElement('canvas');const sw=rot%180?h:w,sh=rot%180?w:h;c.width=sw;c.height=sh;
   const x=c.getContext('2d');x.translate(sw/2,sh/2);x.rotate(rot*Math.PI/180);x.imageSmoothingQuality='high';x.drawImage(img,-w/2,-h/2,w,h);
@@ -686,6 +705,159 @@ $('#vfFile').addEventListener('change',async e=>{
   if(st.lotOK===true&&st.hdOK===true){it.vf='ok';it.vfTxt='';refreshCard(it)}
   vfRender(it,st);
 });
+/* ---------- chụp toàn bộ tủ ---------- */
+let SHOTS=[],SHOT_RES=null,SAMPLE_FN=null;
+const SH_STOP=new Set(['TIEM','TRUYEN','DUNG','DICH','NHU','INJ','INJECTION','ORAL','CHAI','VIEN','TUYP','SOLUTION','FOR','KALCEKS','AGUETTANT','HAMELN','KABI','BINH','DINH','VINPHACO','DANAPHA','VIDIPHA','PANPHARMA','BRAUN','EGIS','NORMON','PROAMP','MELT','LYOPHILISATE','JELLY','ONG','NHUA']);
+const CTRL_KW=/FENTANYL|MORPHIN|PETHIDIN|SUFENTANIL|REMIFENTANIL|KETAMIN|MIDAZOLAM|DIAZEPAM|PHENOBARBITAL|ZODAMID/;
+function shDrugs(){
+  const m=new Map();
+  for(const i of S.items){if(m.has(i.ma))continue;const T=fold(i.ten).toUpperCase();
+    const toks=T.split(/[^A-Z0-9.%]+/).filter(t=>/^[A-Z]{4,}$/.test(t)&&!SH_STOP.has(t));
+    const str=(T.match(/\d+(?:[.,]\d+)?\s*(?:%|MG|MCG|G|ML|IU|UI)(?:\s*\/\s*\d*(?:[.,]\d+)?\s*(?:ML|G))?/g)||[]).map(s=>s.replace(/\s+/g,'').replace(',','.'));
+    m.set(i.ma,{ma:i.ma,ten:i.ten,dvt:i.dvt,g:i.g,toks,primary:toks[0]||'',str,ctrl:CTRL_KW.test(T)||/OPI|GAY NGHIEN|HUONG THAN/.test(fold(i.g).toUpperCase())})}
+  return [...m.values()].filter(d=>d.primary);
+}
+const tokEq=(a,b)=>{if(a==b)return true;const L=Math.max(a.length,b.length);const tol=L>=9?2:L>=5?1:0;return tol>0&&Math.abs(a.length-b.length)<=tol&&lev(a,b)<=tol};
+function shLASA(a,b){
+  if(a.ma==b.ma)return '';
+  if(a.primary==b.primary)return `cùng hoạt chất/tên "${a.primary}" nhưng khác hàm lượng/dạng`;
+  if(a.primary.length>=6&&b.primary.length>=6&&lev(a.primary,b.primary)<=2)return 'tên đọc/viết gần giống nhau';
+  const K=d=>/POTASSIUM|KALI/.test(d.toks.join(' '))&&/CHLORID/.test(d.toks.join(' ')),N=d=>/NATRI|SODIUM/.test(d.toks.join(' '))&&/CLORID|CHLORID/.test(d.toks.join(' '));
+  if((K(a)&&N(b))||(K(b)&&N(a)))return 'Kali clorid đậm đặc dễ nhầm với Natri clorid';
+  return '';
+}
+function shGeom(img,rot,target){const big=Math.max(img.naturalWidth,img.naturalHeight);const sc=Math.min(target/big,big<1200?2:1);
+  const w=Math.round(img.naturalWidth*sc),h=Math.round(img.naturalHeight*sc);return {sc,w,h,sw:rot%180?h:w,sh:rot%180?w:h}}
+function shBack(G,rot,x,y){const X=x-G.sw/2,Y=y-G.sh/2;let u,v;
+  if(rot==90){u=Y;v=-X}else if(rot==270){u=-Y;v=X}else{u=X;v=Y}return [(u+G.w/2)/G.w,(v+G.h/2)/G.h]}
+function shRender(){
+  $('#shotThumbs').innerHTML=SHOTS.map((s,k)=>`<div class="thumbx"><img src="${s.url}" alt="Ảnh ngăn ${k+1}"><span>Ngăn ${k+1}</span><button type="button" data-rm="${s.id}" aria-label="Xoá ảnh">×</button></div>`).join('');
+  $('#shotRun').disabled=!SHOTS.length;$('#shotAI').disabled=!SHOTS.length;
+  $('#shotNote').textContent=SHOTS.length?`${SHOTS.length} ảnh.`:'Chưa có ảnh.';
+}
+async function shAnalyze(){
+  const btn=$('#shotRun');btn.disabled=true;const note=$('#shotNote');
+  const drugs=shDrugs(),byMa=new Map(drugs.map(d=>[d.ma,d])),today0=new Date(S.meta.ngay||today());
+  const res={shots:[],dets:[]};
+  try{
+    const w=await getOCR();
+    for(let k=0;k<SHOTS.length;k++){const s=SHOTS[k];const {img,url}=await loadImg(s.file);
+      const lines=[];const passes=[[0,'gray'],[90,'gray'],[270,'gray'],[0,'bin']];
+      for(let pi=0;pi<passes.length;pi++){const [rot,mode]=passes[pi];note.textContent=`Đang đọc ảnh ${k+1}/${SHOTS.length} – lượt ${pi+1}/${passes.length}…`;
+        const G=shGeom(img,rot,2400);const c=prepAt(img,rot,mode,2400);
+        const r=await Promise.race([w.recognize(c),new Promise((_,no)=>setTimeout(()=>no({timeout:true}),45000))]).catch(async e=>{if(e&&e.timeout){try{await OCRW.terminate()}catch(x){}OCRW=null}return null});
+        if(!r)continue;
+        for(const l of r.data.lines||[]){const t=l.text.trim();if(!t)continue;const b=l.bbox;
+          const p1=shBack(G,rot,b.x0,b.y0),p2=shBack(G,rot,b.x1,b.y1);
+          lines.push({t,x0:Math.min(p1[0],p2[0]),y0:Math.min(p1[1],p2[1]),x1:Math.max(p1[0],p2[0]),y1:Math.max(p1[1],p2[1]),pass:pi})}}
+      URL.revokeObjectURL(url);
+      const dets=[];
+      const near=(a,b)=>Math.hypot((a.x0+a.x1)/2-(b.x0+b.x1)/2,(a.y0+a.y1)/2-(b.y0+b.y1)/2);
+      const push=d=>{if(dets.some(o=>o.kind==d.kind&&o.key==d.key&&near(o,d)<0.04))return;dets.push(d)};
+      lines.forEach((L,li)=>{
+        const ctx=[L,...lines.filter((o,j)=>j!==li&&o.pass==L.pass&&Math.abs(o.y0-L.y1)<0.04&&Math.abs(o.x0-L.x0)<0.15)];
+        const ctxT=ctx.map(o=>o.t).join(' '),U=fold(L.t).toUpperCase(),CU=fold(ctxT).toUpperCase().replace(/\s+/g,''),words=U.split(/[^A-Z]+/).filter(x=>x.length>=4);
+        // tên thuốc
+        const hits=drugs.filter(d=>words.some(wd=>tokEq(wd,d.primary)));
+        if(hits.length){const sc=d=>d.toks.slice(1).filter(t=>words.some(wd=>tokEq(wd,t))||CU.includes(t)).length*2+d.str.filter(x=>CU.includes(x.toUpperCase())).length*3;
+          const best=Math.max(...hits.map(sc)),top=hits.filter(d=>sc(d)==best);
+          const groups=new Map();for(const d of top){if(!groups.has(d.primary))groups.set(d.primary,[]);groups.get(d.primary).push(d)}
+          for(const arr of groups.values())push({kind:'name',key:arr.map(d=>d.ma).join('|'),mas:arr.map(d=>d.ma),...L,txt:L.t})}
+        // số lô
+        for(const it of S.items){if(!it.lo||it.lo.length<4)continue;if(lotIn(L.t,it.lo))push({kind:'lot',key:it.id,id:it.id,ma:it.ma,...L,txt:L.t})}
+        // hạn dùng
+        const ds=findDates(L.t);if(ds.all.length){const y0=today0.getFullYear();const o=ds.all.filter(o=>o.exp&&!o.alt&&o.y>=y0-3).sort((a,b)=>b.y-a.y||b.m-a.m)[0];
+          if(o){const dd=new Date(o.y,o.m-1,o.d||28),mo=(dd-today0)/(30.44*864e5);push({kind:'date',key:fmtD(o),o,mo,...L,txt:L.t})}}
+      });
+      // gán hạn dùng với lô gần nhất
+      for(const d of dets.filter(x=>x.kind=='date')){const lots=dets.filter(x=>x.kind=='lot');let b=null,bd=1e9;for(const l of lots){const dd=near(l,d);if(dd<bd){bd=dd;b=l}}if(b&&bd<0.12)d.lot=b.id}
+      res.shots.push({id:s.id,url:s.url,k,dets,ar:img.naturalWidth/img.naturalHeight});res.dets.push(...dets.map(d=>({...d,shot:k})))}
+  }catch(e){note.textContent='Lỗi khi đọc ảnh: '+(e&&e.message||e);btn.disabled=false;return}
+  // tổng hợp
+  const seen=new Map();for(const d of res.dets.filter(x=>x.kind=='name')){for(const ma of d.mas){if(!seen.has(ma))seen.set(ma,{n:0,amb:d.mas.length>1,shots:new Set()});const r=seen.get(ma);r.n+=1/d.mas.length;r.shots.add(d.shot);if(d.mas.length==1)r.amb=false}}
+  for(const d of res.dets.filter(x=>x.kind=='lot')){if(!seen.has(d.ma))seen.set(d.ma,{n:0,amb:false,shots:new Set()});seen.get(d.ma).shots.add(d.shot)}
+  const warns=[];
+  for(const s of res.shots){const nd=s.dets.filter(x=>x.kind=='name'&&x.mas.length==1);
+    const done=new Set();
+    for(let i=0;i<nd.length;i++)for(let j=i+1;j<nd.length;j++){const a=byMa.get(nd[i].mas[0]),b=byMa.get(nd[j].mas[0]);if(!a||!b)continue;
+      const why=shLASA(a,b);if(!why)continue;const dist=Math.hypot((nd[i].x0+nd[i].x1-nd[j].x0-nd[j].x1)/2,(nd[i].y0+nd[i].y1-nd[j].y0-nd[j].y1)/2);
+      const key=[a.ma,b.ma].sort().join('-');if(dist<0.3&&!done.has(key)){done.add(key);warns.push({lv:'r',t:`LASA – ${a.ten} đặt gần ${b.ten} (ngăn ${s.k+1}): ${why}.`})}}
+    const ctrl=nd.filter(d=>byMa.get(d.mas[0])?.ctrl),norm_=nd.filter(d=>!byMa.get(d.mas[0])?.ctrl);
+    if(ctrl.length&&norm_.length)warns.push({lv:'a',t:`Thuốc gây nghiện/hướng thần (${[...new Set(ctrl.map(d=>byMa.get(d.mas[0]).ten))].join(', ')}) thấy chung ngăn ${s.k+1} với thuốc thường – kiểm tra quy định bảo quản riêng, có khoá.`});
+    for(const d of s.dets.filter(x=>x.kind=='date')){const it=d.lot?byId(d.lot):null;const lab=it?`${it.ten} lô ${it.lo}`:'Một hộp/lọ';
+      if(d.mo<0)warns.push({lv:'r',t:`${lab} (ngăn ${s.k+1}): hạn dùng ${d.key} – ĐÃ HẾT HẠN.`});
+      else if(d.mo<=6)warns.push({lv:'a',t:`${lab} (ngăn ${s.k+1}): hạn dùng ${d.key} – còn khoảng ${Math.floor(d.mo)} tháng.`});
+      if(it&&it.hd){const e=parseD(it.hd);if(e&&(e.getFullYear()!=d.o.y||e.getMonth()+1!=d.o.m))warns.push({lv:'a',t:`${it.ten} lô ${it.lo} (ngăn ${s.k+1}): hạn dùng đọc trên lọ ${d.key} khác sổ sách ${it.hd}.`})}}}
+  SHOT_RES={res,seen,warns,drugs,at:new Date()};note.textContent=`Đã phân tích ${SHOTS.length} ảnh.`;btn.disabled=false;shReport();
+}
+function shReport(){
+  if(!SHOT_RES){$('#shotRes').innerHTML='';return}
+  const {res,seen,warns,drugs}=SHOT_RES;
+  const rows=drugs.map(d=>{const m=maInfo(d.ma),r=seen.get(d.ma);const lotsSeen=[...new Set(res.dets.filter(x=>x.kind=='lot'&&x.ma==d.ma).map(x=>byId(x.id)?.lo).filter(Boolean))];
+    return {d,qty:m.tt,coso:m.coso,r,lotsSeen}}).filter(x=>x.qty>0||x.r);
+  const seenN=rows.filter(x=>x.r).length,expN=rows.filter(x=>x.qty>0).length,miss=rows.filter(x=>x.qty>0&&!x.r);
+  $('#shotRes').innerHTML=`
+  <div class="kpis"><div class="kpi g"><b>${seenN}/${expN}</b><span>thuốc có tồn đã nhận ra trên ảnh</span></div><div class="kpi r"><b>${warns.filter(w=>w.lv=='r').length}</b><span>cảnh báo cần xử lý</span></div><div class="kpi a"><b>${warns.filter(w=>w.lv=='a').length}</b><span>cảnh báo cần xem lại</span></div></div>
+  <div class="card"><h3>Cảnh báo sắp xếp và hạn dùng</h3>${warns.length?`<ul class="wl">${warns.map(w=>`<li class="${w.lv}">${esc(w.t)}</li>`).join('')}</ul>`:'<p class="note">Không phát hiện vấn đề trong phần chữ đọc được.</p>'}</div>
+  <div class="card"><h3>Thuốc trong danh mục</h3><p class="note">"Nhãn đọc được" là số chỗ app đọc ra tên thuốc trên ảnh – chỉ là ước lượng sơ bộ, không thay cho đếm thực tế. Thuốc "không thấy" có thể do nhãn quay vào trong, bị che hoặc chữ quá nhỏ.</p>
+  <table class="stack"><thead><tr><th>Thuốc</th><th class="n">Sổ sách/thực tế</th><th class="n">Nhãn đọc được</th><th>Lô thấy trên ảnh</th><th>Trạng thái</th></tr></thead><tbody>
+  ${rows.sort((a,b)=>(!!b.r-!!a.r)||a.d.ten.localeCompare(b.d.ten)).map(x=>`<tr><td><b>${esc(x.d.ten)}</b><div class="note">Mã ${esc(x.d.ma)}</div></td><td class="n">${x.qty}</td><td class="n">${x.r?Math.round(x.r.n)||'–':0}</td><td>${esc(x.lotsSeen.join(', '))}</td>
+  <td style="font-weight:700;color:var(--${x.r?(x.qty>0?'ok':'amber'):'brick'})">${x.r?(x.qty>0?'Thấy':'Thấy – sổ sách 0')+(x.r.amb?' (chưa rõ hàm lượng)':'')+` · ngăn ${[...x.r.shots].map(n=>n+1).join(', ')}`:'Không thấy'}</td></tr>`).join('')}</tbody></table></div>
+  <div class="card"><h3>Ảnh đã đánh dấu</h3><p class="note">Khung xanh: tên thuốc · khung xanh dương: số lô · khung đỏ/vàng: hạn dùng đã hết/cận hạn.</p><div id="shotCanvases"></div></div>`;
+  const box=$('#shotCanvases');
+  for(const s of res.shots){const wrap=document.createElement('div');wrap.className='shotc';const h=document.createElement('div');h.className='note';h.textContent=`Ngăn ${s.k+1}`;const cv=document.createElement('canvas');wrap.append(h,cv);box.append(wrap);
+    const img=new Image();img.onload=()=>{const W=Math.min(1400,img.naturalWidth),H=Math.round(W/s.ar);cv.width=W;cv.height=H;const x=cv.getContext('2d');x.drawImage(img,0,0,W,H);
+      x.lineWidth=Math.max(2,W/400);x.font=`${Math.max(12,Math.round(W/70))}px system-ui,sans-serif`;
+      for(const d of s.dets){const col=d.kind=='name'?'#1f9d55':d.kind=='lot'?'#1d4ed8':(d.mo<0?'#dc2626':d.mo<=6?'#d97706':null);if(!col)continue;
+        const X=d.x0*W-3,Y=d.y0*H-3,Wd=(d.x1-d.x0)*W+6,Hd=(d.y1-d.y0)*H+6;x.strokeStyle=col;x.strokeRect(X,Y,Wd,Hd);
+        const lab=d.kind=='name'?d.mas.map(m=>(SHOT_RES.drugs.find(q=>q.ma==m)||{}).primary).join('/'):d.kind=='lot'?'Lô '+(byId(d.id)?.lo||''):'HD '+d.key;
+        const tw=x.measureText(lab).width+8,th=parseInt(x.font)+6;const ly=Y-th<0?Y+Hd:Y-th;x.fillStyle=col;x.fillRect(X,ly,tw,th);x.fillStyle='#fff';x.fillText(lab,X+4,ly+th-5)}};
+    img.src=s.url}
+}
+async function shAI(){
+  const out=$('#shotAIRes');if(!SAMPLE_FN||!SHOTS.length)return;
+  const lim=await SAMPLE_FN.limits().catch(()=>null);const maxN=lim?.images?.maxCount||5;
+  const pick=SHOTS.slice(0,maxN);
+  out.innerHTML='<div class="card"><div class="busy"><i></i><span>AI đang xem ảnh tủ… (thường 30–90 giây)</span></div></div>';
+  const blobs=[];for(const s of pick){const {img,url}=await loadImg(s.file);const sc=Math.min(1,1800/Math.max(img.naturalWidth,img.naturalHeight));const c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*sc);c.height=Math.round(img.naturalHeight*sc);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);blobs.push(await new Promise(r=>c.toBlob(r,'image/jpeg',0.88)))}
+  const list=[...new Map(S.items.map(i=>[i.ma,i])).keys()].map(ma=>{const m=maInfo(ma),arr=S.items.filter(i=>i.ma==ma);return {ma,ten:arr[0].ten,dvt:arr[0].dvt,co_so:m.coso,so_luong_hien_co:m.tt,lo:arr.filter(i=>i.lo).map(i=>({lo:i.lo,han_dung:i.hd}))}});
+  const prompt=`Bạn là dược sĩ kiểm tra tủ thuốc trực tại khoa lâm sàng (Bệnh viện, Việt Nam). Kèm theo là ${blobs.length} ảnh chụp các ngăn của tủ "${S.meta.tu}" (ảnh 1 = ngăn 1, theo thứ tự). Ngày kiểm: ${S.meta.ngay}.
+Danh mục thuốc của tủ (JSON, so_luong_hien_co = số đếm thực tế hoặc sổ sách):
+${JSON.stringify(list)}
+
+Hãy đánh giá SƠ BỘ dựa trên những gì NHÌN THẤY được trong ảnh:
+1. Thuốc nào trong danh mục thấy được, ước lượng số hộp/lọ/ống nhìn thấy (null nếu không đếm được), ở ngăn nào.
+2. Thuốc/vật tư nhìn thấy nhưng KHÔNG thuộc danh mục.
+3. Vấn đề sắp xếp: thuốc LASA (nhìn giống/đọc giống, cùng hoạt chất khác hàm lượng) để cạnh nhau, thuốc nguy cơ cao (KCl đậm đặc, insulin, thuốc gây nghiện/hướng thần) để lẫn, thuốc để lẫn ngăn, thiếu nhãn/thẻ kệ, bao bì hư hỏng, vệ sinh.
+4. Hạn dùng đọc được trên bao bì, nêu lô nếu đọc được; cảnh báo hết hạn hoặc còn ≤ 6 tháng.
+Chỉ nói những gì thấy rõ; chỗ nào không chắc thì nói không chắc. Viết tiếng Việt.
+
+Trả lời CHỈ bằng một đối tượng JSON đúng dạng:
+{"tong_quan":"2-4 câu","thuoc":[{"ma":"39","ten":"...","thay":true,"so_luong_uoc_tinh":3,"ngan":"1","ghi_chu":""}],"ngoai_danh_muc":[{"ten":"...","ngan":"2","ghi_chu":""}],"sap_xep":[{"muc_do":"cao|trung bình|thấp","van_de":"...","ngan":"1","de_xuat":"..."}],"han_dung":[{"ten":"...","lo":"...","han_dung":"dd/mm/yyyy","nhan_xet":"..."}],"khong_chac_chan":"những gì không đánh giá được"}
+Mục "thuoc" chỉ liệt kê thuốc trong danh mục mà bạn thấy được.`;
+  try{
+    const r=await SAMPLE_FN.json(prompt,{images:blobs});
+    const A=v=>Array.isArray(v)?v:[];const t=v=>esc(v==null?'':String(v));
+    const seenMa=new Set(A(r.thuoc).map(x=>String(x.ma)));
+    const missing=list.filter(x=>x.so_luong_hien_co>0&&!seenMa.has(String(x.ma)));
+    out.innerHTML=`<div class="card"><h3>Đánh giá của AI</h3><p>${t(r.tong_quan)}</p><p class="note">AI chỉ nhìn ảnh nên có thể sai – dùng để định hướng kiểm tra, không thay cho đếm thực tế.</p></div>
+    <div class="card"><h3>Sắp xếp, LASA, nguy cơ cao</h3>${A(r.sap_xep).length?`<ul class="wl">${A(r.sap_xep).map(x=>`<li class="${/cao/i.test(x.muc_do)?'r':'a'}"><b>${t(x.van_de)}</b>${x.ngan?` (ngăn ${t(x.ngan)})`:''}${x.de_xuat?`<br><span class="note">Đề xuất: ${t(x.de_xuat)}</span>`:''}</li>`).join('')}</ul>`:'<p class="note">Không nêu vấn đề.</p>'}</div>
+    <div class="card"><h3>Thuốc thấy trên ảnh</h3><table class="stack"><thead><tr><th>Thuốc</th><th class="n">Ước tính thấy</th><th class="n">Sổ sách/thực tế</th><th>Ngăn</th><th>Ghi chú</th></tr></thead><tbody>
+    ${A(r.thuoc).map(x=>{const m=list.find(l=>String(l.ma)==String(x.ma));return `<tr><td>${t(x.ten||m?.ten)}</td><td class="n">${x.so_luong_uoc_tinh==null?'–':t(x.so_luong_uoc_tinh)}</td><td class="n">${m?m.so_luong_hien_co:''}</td><td>${t(x.ngan)}</td><td>${t(x.ghi_chu)}</td></tr>`}).join('')}</tbody></table>
+    ${missing.length?`<p class="note" style="margin-top:8px">Có tồn nhưng AI không thấy: ${esc(missing.map(m=>m.ten).join('; '))}</p>`:''}</div>
+    ${A(r.ngoai_danh_muc).length?`<div class="card"><h3>Ngoài danh mục</h3><ul class="wl">${A(r.ngoai_danh_muc).map(x=>`<li class="a">${t(x.ten)}${x.ngan?` (ngăn ${t(x.ngan)})`:''}${x.ghi_chu?' – '+t(x.ghi_chu):''}</li>`).join('')}</ul></div>`:''}
+    ${A(r.han_dung).length?`<div class="card"><h3>Hạn dùng đọc được</h3><table class="stack"><thead><tr><th>Thuốc</th><th>Lô</th><th>Hạn dùng</th><th>Nhận xét</th></tr></thead><tbody>${A(r.han_dung).map(x=>`<tr><td>${t(x.ten)}</td><td>${t(x.lo)}</td><td>${t(x.han_dung)}</td><td>${t(x.nhan_xet)}</td></tr>`).join('')}</tbody></table></div>`:''}
+    ${r.khong_chac_chan?`<div class="card"><h3>Chưa đánh giá được</h3><p class="note">${t(r.khong_chac_chan)}</p></div>`:''}`;
+  }catch(e){const c=e&&e.code;
+    out.innerHTML=`<div class="card"><p class="note" style="color:var(--brick)">${c=='not_granted'||c=='sampling_disabled'?'Chưa được cấp quyền dùng AI cho trang này.':c=='rate_limited'?'Đã dùng AI quá nhiều trong thời gian ngắn – thử lại sau.':c=='invalid_json'?'AI trả lời sai định dạng – bấm thử lại.':c=='image_rejected'?'Ảnh không hợp lệ hoặc quá lớn.':'Không gọi được AI ('+esc(c||'lỗi')+'). Kiểm tra mạng và thử lại.'}</p></div>`;
+    if(c=='not_granted'||c=='sampling_disabled')$('#shotAI').hidden=true}
+}
+$('#shotFiles').addEventListener('change',e=>{for(const f of e.target.files)SHOTS.push({id:'s'+Date.now()+Math.random().toString(36).slice(2,6),file:f,url:URL.createObjectURL(f)});e.target.value='';shRender()});
+$('#shotThumbs').addEventListener('click',e=>{const b=e.target.closest('[data-rm]');if(!b)return;const s=SHOTS.find(x=>x.id==b.dataset.rm);if(s)URL.revokeObjectURL(s.url);SHOTS=SHOTS.filter(x=>x!==s);shRender()});
+$('#shotClear').addEventListener('click',()=>{SHOTS.forEach(s=>URL.revokeObjectURL(s.url));SHOTS=[];SHOT_RES=null;$('#shotRes').innerHTML='';$('#shotAIRes').innerHTML='';shRender()});
+$('#shotRun').addEventListener('click',shAnalyze);
+$('#shotAI').addEventListener('click',shAI);
+(async()=>{try{const s=await window.claude?.use?.('sample');if(!s)return;const lim=await s.limits().catch(()=>null);if(!lim||!lim.images)return;SAMPLE_FN=s;$('#shotAI').hidden=false;$('#shotAIHint').hidden=false}catch(e){}})();
 /* ---------- export ---------- */
 const COLS=['Số TT','Mã kỹ thuật','Tên thuốc, nồng độ, hàm lượng','Đơn vị','Số kiểm soát','Nước sản xuất','Hạn dùng','Cơ số','Sổ sách','Thực tế','Hỏng/vỡ','Ghi chú'];
 const fmtDT=v=>{if(!v)return '… giờ …, ngày … tháng … năm …';const d=new Date(v);return `${pad(d.getHours())} giờ ${pad(d.getMinutes())}, ngày ${pad(d.getDate())} tháng ${pad(d.getMonth()+1)} năm ${d.getFullYear()}`};
