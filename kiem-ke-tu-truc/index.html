@@ -240,6 +240,7 @@ dialog::backdrop{background:rgb(0 0 0/.45)}
 <script>
 if('serviceWorker' in navigator){addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').then(r=>{
   const tell=()=>{const n=document.getElementById('offNote');if(n)n.textContent='Đã sẵn sàng dùng offline trên máy này.'};
+  const hadCtl=!!navigator.serviceWorker.controller;let reloaded=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(hadCtl&&!reloaded){reloaded=true;location.reload()}});r.update().catch(()=>{});
   if(navigator.serviceWorker.controller)tell();navigator.serviceWorker.ready.then(x=>{if(navigator.onLine&&x.active)x.active.postMessage('ensure')});navigator.serviceWorker.addEventListener('controllerchange',tell);
   r.addEventListener('updatefound',()=>{const w=r.installing;w&&w.addEventListener('statechange',()=>{if(w.state=='activated')tell()})})}).catch(()=>{})})}
 </script>
