@@ -441,7 +441,7 @@ $('#scanBtn').addEventListener('click',()=>$('#scanFile').click());
 $('#scanFile').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;toast('Đang đọc chữ trên nhãn…');
   try{const txt=await ocrAll(f,t=>S.items.some(i=>norm(i.lo).length>=4&&lotIn(t,i.lo)));
     const hits=S.items.filter(i=>norm(i.lo).length>=4&&lotIn(txt,i.lo));
-    const ds=findDates(txt);scanDlg({lo:hits[0]?.lo||'',hd:ds.best?fmtD(ds.best):'',ocr:true,hits})}
+    const ds=findDates(txt);scanDlg({lo:hits[0]?.lo||'',hd:hits[0]&&hdFound(txt,hits[0].hd)?hits[0].hd:(ds.best?fmtD(ds.best):''),ocr:true,hits})}
   catch(err){scanDlg(null)}});
 
 /* ---------- OCR + đối chiếu lô/HD ---------- */
@@ -486,25 +486,60 @@ function analyzeLot(text,it){
   return {lotOK:null,lo:''};
 }
 const MON={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+function ocrNorm(text){
+  let t=fold(text).toUpperCase();
+  for(let k=0;k<2;k++)t=t.replace(/(?<=\d)[OQ]|[OQ](?=\d{2})/g,'0').replace(/(?<=\d)[IL|!]|[IL|!](?=\d)/g,'1').replace(/(?<=\d)S|S(?=\d{2})/g,'5').replace(/(?<=\d)B(?=\d)/g,'8').replace(/(?<=\d)Z(?=\d)/g,'2').replace(/(?<=\d)G(?=\d)/g,'6');
+  return t.replace(/(\d)\s*([.\/\-,:])\s*(?=\d)/g,'$1$2').replace(/(\d),(?=\d)/g,'$1.');
+}
+const EXP_RE=/EXP|HSD|H\.?\s?D\b|HAN|USE|EX\b|BEST|VAL|CAD|SCAD|VERW|BB\b/,MFG_RE=/MFG|MFD|NSX|N\.?S\.?X|NGAY\s*SX|\bSX|MANUF|PROD|DOM|HERG|FAB/;
 function findDates(text){
-  let t=fold(text).toUpperCase().replace(/(?<=\d)[OQ]|[OQ](?=\d)/g,'0').replace(/(?<=\d)[IL|]|[IL|](?=\d)/g,'1');
-  const out=[];
-  const add=(y,m,d,idx)=>{y=+y;if(y<100)y+=2000;m=+m;d=d==null?null:+d;
-    if(y<2020||y>2045||m<1||m>12||(d!=null&&(d<1||d>31)))return;
-    const pre=t.slice(Math.max(0,idx-14),idx);
-    out.push({y,m,d,exp:/EXP|HSD|H\.?\s?D\b|HAN|USE|EX\b|BEST|VAL|CAD|SCAD|VERW|BB\b/.test(pre),mfg:/MFG|MFD|NSX|N\.?S\.?X|NGAY\s*SX|\bSX|MANUF|PROD|DOM|HERG|FAB/.test(pre)})};
-  for(const x of t.matchAll(/(?<!\d)(\d{1,2})[.\/\- ](\d{1,2})[.\/\- ](\d{4}|\d{2})(?!\d)/g))add(x[3],x[2],x[1],x.index);
+  const t=ocrNorm(text),out=[];
+  const ctx=idx=>t.slice(Math.max(0,idx-16),idx);
+  const add=(y,m,d,idx,alt)=>{y=+y;if(y<100)y+=2000;m=+m;d=d==null?null:+d;
+    if(y<2020||y>2045||m<1||m>12||(d!=null&&(d<1||d>31)))return;const pre=ctx(idx);
+    out.push({y,m,d,alt:!!alt,exp:EXP_RE.test(pre),mfg:MFG_RE.test(pre)})};
+  for(const x of t.matchAll(/(?<!\d)(\d{1,2})[.\/\-, ](\d{1,2})[.\/\-, ](\d{4}|\d{2})(?!\d)/g))add(x[3],x[2],x[1],x.index);
   for(const x of t.matchAll(/(?<!\d)(20\d\d)[.\/\-](\d{1,2})(?:[.\/\-](\d{1,2}))?(?!\d)/g))add(x[1],x[2],x[3]??null,x.index);
   for(const x of t.matchAll(/(?<![\d.\/\-])(\d{1,2})[.\/\-](20\d\d|\d\d)(?![\d.\/\-])/g))add(x[2],x[1],null,x.index);
   for(const x of t.matchAll(/(?:(\d{1,2})[ .\/\-]?)?(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[ .\/\-]*(20\d\d|\d\d)(?!\d)/g))add(x[3],MON[x[2]],x[1]??null,x.index);
+  // ngày viết liền không dấu
+  for(const x of t.matchAll(/(?<![\dA-Z])(\d{8})(?![\dA-Z])/g)){const s=x[1];
+    if(/^20\d\d/.test(s))add(s.slice(0,4),s.slice(4,6),s.slice(6),x.index);else add(s.slice(4),s.slice(2,4),s.slice(0,2),x.index)}
+  for(const x of t.matchAll(/(?<![\dA-Z])(\d{6})(?![\dA-Z])/g)){const s=x[1],kw=EXP_RE.test(ctx(x.index))||MFG_RE.test(ctx(x.index));
+    if(/^(0[1-9]|1[0-2])20\d\d$/.test(s)){add(s.slice(2),s.slice(0,2),null,x.index);continue}
+    if(!kw)continue;add(s.slice(4),s.slice(2,4),s.slice(0,2),x.index,true);add(s.slice(0,2),s.slice(2,4),s.slice(4),x.index,true)}
+  for(const x of t.matchAll(/(?<![\dA-Z])(\d{4})(?![\dA-Z])/g)){if(!EXP_RE.test(ctx(x.index)))continue;const s=x[1];if(/^20\d\d$/.test(s))continue;add(s.slice(2),s.slice(0,2),null,x.index,true)}
   const key=o=>o.y*10000+o.m*100+(o.d||0);
-  const cand=out.filter(o=>o.exp).length?out.filter(o=>o.exp):out.filter(o=>!o.mfg).length?out.filter(o=>!o.mfg):out;
-  const best=cand.sort((a,b)=>key(b)-key(a))[0]||null;
+  const pool=out.filter(o=>!o.alt).length?out.filter(o=>!o.alt):out;
+  const cand=pool.filter(o=>o.exp).length?pool.filter(o=>o.exp):pool.filter(o=>!o.mfg).length?pool.filter(o=>!o.mfg):pool;
+  const best=cand.slice().sort((a,b)=>key(b)-key(a))[0]||null;
   return {all:out,best};
 }
 const fmtD=o=>o?(o.d?`${pad(o.d)}/${pad(o.m)}/${o.y}`:`${pad(o.m)}/${o.y}`):'';
 function dateMatch(dates,hd){const e=parseD(hd);if(!e)return null;
   return dates.all.find(o=>o.y==e.getFullYear()&&o.m==e.getMonth()+1&&(!o.d||o.d==e.getDate()))||null}
+// Dò đúng hạn dùng trong sổ sách dưới mọi cách viết (dấu chấm, gạch, cách, viết liền, tên tháng)
+const MON_N=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function expectedDateIn(text,hd){
+  const e=parseD(hd);if(!e)return null;
+  let t=fold(text).toUpperCase();
+  for(const i of S.items)if(i.lo&&i.lo.length>=4)t=t.split(i.lo.toUpperCase()).join(' ');
+  t=ocrNorm(t);
+  const d=e.getDate(),m=e.getMonth()+1,Y=String(e.getFullYear()),yy=Y.slice(2);
+  const D=`0?${d}`,M=`0?${m}`,sep='[\\s.\\/\\-,:]*',sep1='[\\s.\\/\\-,:]+',YR=`(?:20)?${yy}`;
+  const tries=[
+    [`(?<!\\d)${D}${sep}${M}${sep}${YR}(?!\\d)`,true],
+    [`(?<!\\d)${Y}${sep}${M}${sep}${D}(?!\\d)`,true],
+    [`(?<!\\d)${yy}${sep}${pad(m)}${sep}${pad(d)}(?!\\d)`,true],
+    [`(?<!\\d)${M}${sep1}${YR}(?!\\d)`,false],
+    [`(?<!\\d)${pad(m)}${Y}(?!\\d)`,false],
+    [`(?<!\\d)${Y}${sep1}${M}(?!\\d)`,false],
+    [`${MON_N[m-1]}[A-Z]*${sep}${YR}(?!\\d)`,false],
+    [`(?:${EXP_RE.source})[^0-9]{0,6}${pad(m)}${sep}${yy}(?!\\d)`,false]];
+  for(const [re,full] of tries){const x=new RegExp(re).exec(t);if(x)return {y:+Y,m,d:full?d:null,raw:x[0].trim()}}
+  return null;
+}
+function hdFound(text,hd){return dateMatch(findDates(text),hd)||expectedDateIn(text,hd)}
 async function getOCR(){
   if(OCRW)return OCRW;
   if(!window.Tesseract)await loadScript('tess/tesseract.min.js');
@@ -513,7 +548,7 @@ async function getOCR(){
     const wrap=emb('tess-eng')+'\n'+emb('tess-core')+`\nconst rf=self.fetch.bind(self);self.fetch=(u,o)=>String(u).endsWith('eng.traineddata.gz')?Promise.resolve(new Response(Uint8Array.from(atob(self.ENG_B64),c=>c.charCodeAt(0)))):rf(u,o);\n`+emb('tess-worker');
     const wurl=URL.createObjectURL(new Blob([wrap],{type:'text/javascript'}));
     OCRW=await Tesseract.createWorker('eng',1,{workerPath:wurl,corePath:'x/tesseract-core-simd-lstm.wasm.js',langPath:'x',workerBlobURL:false,cacheMethod:'none',gzip:true});
-    await OCRW.setParameters({tessedit_pageseg_mode:'11'});return OCRW;
+    await OCRW.setParameters({tessedit_pageseg_mode:'11',user_defined_dpi:'300',tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789./-:,() '});return OCRW;
   }
   const base=new URL('tess/',location.href).href;
   const wrap=`const B=${JSON.stringify(base)};importScripts(B+'eng-data.js');const rf=self.fetch.bind(self);
@@ -521,25 +556,41 @@ self.fetch=(u,o)=>String(u).endsWith('eng.traineddata.gz')?Promise.resolve(new R
 importScripts(B+'worker.min.js');`;
   const wurl=URL.createObjectURL(new Blob([wrap],{type:'text/javascript'}));
   OCRW=await Tesseract.createWorker('eng',1,{workerPath:wurl,corePath:base,langPath:base.replace(/\/$/,''),workerBlobURL:false,cacheMethod:'none',gzip:true});
-  await OCRW.setParameters({tessedit_pageseg_mode:'11'});
+  await OCRW.setParameters({tessedit_pageseg_mode:'11',user_defined_dpi:'300',tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789./-:,() '});
   return OCRW;
 }
 async function loadImg(file){const url=URL.createObjectURL(file);const img=new Image();img.src=url;await img.decode();return {img,url}}
-function prep(img,rot){
-  const sc=Math.min(1,1500/Math.max(img.naturalWidth,img.naturalHeight))*(Math.max(img.naturalWidth,img.naturalHeight)<1000?1.8:1);
+function prep(img,rot,mode){
+  const big=Math.max(img.naturalWidth,img.naturalHeight),target=mode=='bin'?2000:1500;
+  const sc=Math.min(target/big,big<1000?2:1.2);
   const w=Math.round(img.naturalWidth*sc),h=Math.round(img.naturalHeight*sc);
   const c=document.createElement('canvas');const sw=rot%180?h:w,sh=rot%180?w:h;c.width=sw;c.height=sh;
-  const x=c.getContext('2d');x.translate(sw/2,sh/2);x.rotate(rot*Math.PI/180);x.drawImage(img,-w/2,-h/2,w,h);
-  const d=x.getImageData(0,0,sw,sh),p=d.data,hist=new Uint32Array(256);
-  for(let i=0;i<p.length;i+=4){const g=(p[i]*.3+p[i+1]*.59+p[i+2]*.11)|0;p[i]=g;hist[g]++}
-  let lo=0,hi=255,acc=0,n=p.length/4;for(;lo<255&&(acc+=hist[lo])<n*.02;lo++);acc=0;for(;hi>0&&(acc+=hist[hi])<n*.02;hi--);
-  const k=255/Math.max(1,hi-lo);for(let i=0;i<p.length;i+=4){const g=Math.max(0,Math.min(255,(p[i]-lo)*k));p[i]=p[i+1]=p[i+2]=g}
+  const x=c.getContext('2d');x.translate(sw/2,sh/2);x.rotate(rot*Math.PI/180);x.imageSmoothingQuality='high';x.drawImage(img,-w/2,-h/2,w,h);
+  const d=x.getImageData(0,0,sw,sh),p=d.data,N=sw*sh,g=new Float32Array(N),hist=new Uint32Array(256);
+  for(let i=0,j=0;j<N;i+=4,j++){const v=(p[i]*.3+p[i+1]*.59+p[i+2]*.11)|0;g[j]=v;hist[v]++}
+  let lo=0,hi=255,acc=0;for(;lo<255&&(acc+=hist[lo])<N*.01;lo++);acc=0;for(;hi>0&&(acc+=hist[hi])<N*.01;hi--);
+  const k=255/Math.max(1,hi-lo);for(let j=0;j<N;j++)g[j]=Math.max(0,Math.min(255,(g[j]-lo)*k));
+  let o=g;
+  if(mode=='bin'){
+    // làm mờ nhẹ để nối các chấm của chữ in phun, rồi nhị phân hoá theo ngưỡng cục bộ
+    const box=(src,r)=>{const tmp=new Float32Array(N),dst=new Float32Array(N);
+      for(let yy=0;yy<sh;yy++){let s=0;const row=yy*sw;for(let xx=-r;xx<=r;xx++)s+=src[row+Math.min(sw-1,Math.max(0,xx))];
+        for(let xx=0;xx<sw;xx++){tmp[row+xx]=s/(2*r+1);s+=src[row+Math.min(sw-1,xx+r+1)]-src[row+Math.max(0,xx-r)]}}
+      for(let xx=0;xx<sw;xx++){let s=0;for(let yy=-r;yy<=r;yy++)s+=tmp[Math.min(sh-1,Math.max(0,yy))*sw+xx];
+        for(let yy=0;yy<sh;yy++){dst[yy*sw+xx]=s/(2*r+1);s+=tmp[Math.min(sh-1,yy+r+1)*sw+xx]-tmp[Math.max(0,yy-r)*sw+xx]}}
+      return dst};
+    const r1=Math.max(1,Math.round(Math.min(sw,sh)/700)),sm=box(g,r1),mean=box(sm,Math.max(8,Math.round(Math.min(sw,sh)/40)));
+    let dark=0;const b=new Float32Array(N);for(let j=0;j<N;j++){const v=sm[j]<mean[j]-8?0:255;b[j]=v;if(!v)dark++}
+    if(dark>N*0.5)for(let j=0;j<N;j++)b[j]=255-b[j];
+    o=b}
+  for(let i=0,j=0;j<N;i+=4,j++){p[i]=p[i+1]=p[i+2]=o[j];p[i+3]=255}
   x.setTransform(1,0,0,1,0,0);x.putImageData(d,0,0);return c;
 }
-async function ocrAll(file,stop){
+async function ocrAll(file,stop,onStep){
   const w=await getOCR();const {img,url}=await loadImg(file);let acc='';
-  try{for(const rot of [0,90,270]){
-      const r=await Promise.race([w.recognize(prep(img,rot)),new Promise((_,no)=>setTimeout(()=>no({timeout:true,message:'timeout'}),30000))])
+  const passes=[[0,'gray'],[0,'bin'],[90,'gray'],[270,'gray'],[90,'bin'],[270,'bin']];
+  try{for(let i=0;i<passes.length;i++){const [rot,mode]=passes[i];if(onStep)onStep(i+1,passes.length);
+      const r=await Promise.race([w.recognize(prep(img,rot,mode)),new Promise((_,no)=>setTimeout(()=>no({timeout:true,message:'timeout'}),30000))])
         .catch(async e=>{if(e&&e.timeout){try{await OCRW.terminate()}catch(x){}OCRW=null}throw e});
       acc+=r.data.text+'\n';if(stop&&stop(acc))break}}
   finally{URL.revokeObjectURL(url)}
@@ -556,6 +607,7 @@ function vfRender(it,st){
   <table class="cmp"><thead><tr><th></th><th>Sổ sách</th><th>Trên lọ</th><th></th></tr></thead><tbody>
   <tr><td>Số lô</td><td><b>${esc(it.lo)}</b></td><td><b>${esc(st.lo||'–')}</b></td><td>${mk(st.lotOK)}</td></tr>
   <tr><td>Hạn dùng</td><td><b>${esc(it.hd||'–')}</b></td><td><b>${esc(st.hd||'–')}</b></td><td>${mk(st.hdOK)}</td></tr></tbody></table>
+  ${st.dates&&st.dates.length?`<p class="note">Các ngày đọc thấy trên ảnh: ${esc(st.dates.join(', '))}</p>`:''}
   <p class="note">Kết quả đọc chữ có thể sai với chữ dập nổi hoặc in phun – hãy nhìn lại ảnh.</p>
   ${st.lotOK===true&&st.hdOK===true?'<p><b style="color:var(--ok)">Lô và hạn dùng khớp – đã ghi nhận.</b></p>':''}
   ${st.otherId?`<p><b style="color:var(--brick)">Lọ này là lô ${esc(st.lo)} – lô khác của cùng thuốc, đang ở thẻ khác trong danh sách.</b></p>`:''}
@@ -580,11 +632,12 @@ $('#vfFile').addEventListener('change',async e=>{
     if(v=='again'){dlg.close();vfId=it.id;$('#vfFile').click()}
     if(v=='jump'){dlg.close();goTo(st.otherId)}};
   {
-    try{const txt=await ocrAll(f,t=>lotIn(t,it.lo)&&!!dateMatch(findDates(t),it.hd));if(!alive)return;
-      st.src='ocr';st.text=txt.trim();const ds=findDates(txt),dm=dateMatch(ds,it.hd);
+    try{const txt=await ocrAll(f,t=>lotIn(t,it.lo)&&!!hdFound(t,it.hd),(i,n)=>{if(alive&&i>1){st.busy=`Đang thử cách đọc ${i}/${n} (xoay ảnh, tăng nét chữ)…`;vfRender(it,st)}});if(!alive)return;
+      st.src='ocr';st.text=txt.trim();const ds=findDates(txt),dm=hdFound(txt,it.hd);
+      st.dates=[...new Set(ds.all.map(fmtD))].slice(0,6);
       Object.assign(st,analyzeLot(txt,it));
       if(dm){st.hdOK=true;st.hd=fmtD(dm)}else{st.hd=fmtD(ds.best);st.hdOK=ds.best?false:null}
-      if(st.otherId){const o=byId(st.otherId);if(o&&dateMatch(ds,o.hd))st.hd=o.hd}
+      if(st.otherId){const o=byId(st.otherId);if(o&&hdFound(txt,o.hd))st.hd=o.hd}
     }catch(err){if(!alive)return;st.src='ocr';st.lotOK=null;st.hdOK=null;st.err=err&&err.timeout?'Đọc chữ quá lâu nên đã dừng. Chụp lại gần hơn, chỉ lấy vùng in lô/HD, hoặc so bằng mắt với ảnh.':'Bộ đọc chữ gặp lỗi trên máy này. Hãy chụp lại, hoặc so bằng mắt với ảnh rồi bấm Xác nhận đúng / Ghi nhận lệch.';st.text=String(err&&err.message||err||'')}}
   st.busy='';
   if(st.lotOK===true&&st.hdOK===true){it.vf='ok';it.vfTxt='';refreshCard(it)}
