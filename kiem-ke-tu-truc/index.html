@@ -358,24 +358,43 @@ document.querySelector('nav').addEventListener('click',e=>{const b=e.target.clos
 
 /* ---------- summary ---------- */
 function byMa(){const m=new Map();for(const it of S.items){if(!m.has(it.ma))m.set(it.ma,{ma:it.ma,ten:it.ten,dvt:it.dvt,coso:it.coso,ss:0,tt:0,done:true});const r=m.get(it.ma);r.ss+=it.ss;r.tt+=it.tt??it.ss;if(it.tt==null)r.done=false}return [...m.values()]}
+let sumF='short';
+function coSoRows(){const seen=new Map();for(const i of S.items){if(!seen.has(i.ma))seen.set(i.ma,[]);seen.get(i.ma).push(i)}
+  return [...seen.entries()].map(([ma,arr])=>{const m=maInfo(ma);return {ma,ten:[...new Set(arr.map(i=>i.ten))].join(' / '),dvt:m.dvt,lots:arr.filter(i=>i.lo).length,coso:m.coso,ss:arr.reduce((a,i)=>a+i.ss,0),tt:m.tt,done:m.done,d:m.tt-m.coso,g:arr[0].g}}).filter(r=>r.coso>0||r.tt>0)}
 function renderSum(){
   const s=stats(),diff=S.items.filter(i=>status(i)=='diff'),exp=S.items.filter(i=>expLvl(i)>0).sort((a,b)=>monthsLeft(a)-monthsLeft(b));
-  const under=byMa().filter(r=>r.tt<r.coso),hv=S.items.filter(i=>+i.hv>0),added=S.items.filter(i=>i.added);
+  const cs=coSoRows(),short=cs.filter(r=>r.d<0).sort((a,b)=>a.d-b.d),over=cs.filter(r=>r.d>0).sort((a,b)=>b.d-a.d),rv=S.meta.rv||{};
+  const csList=sumF=='short'?short:sumF=='over'?over:cs;
+  const hv=S.items.filter(i=>+i.hv>0),added=S.items.filter(i=>i.added);
   const tbl=(head,rows,empty)=>rows.length?`<table class="stack"><thead><tr>${head}</tr></thead><tbody>${rows.join('')}</tbody></table>`:`<p class="note">${empty}</p>`;
   $('#t-sum').innerHTML=`
   <div class="kpis"><div class="kpi g"><b>${s.done}/${s.n}</b><span>dòng đã kiểm</span></div><div class="kpi r"><b>${s.diff}</b><span>dòng lệch sổ sách</span></div>
-  <div class="kpi a"><b>${s.exp}</b><span>lô cận hạn ≤ 6 tháng</span></div><div class="kpi r"><b>${under.length}</b><span>thuốc dưới cơ số</span></div></div>
-  ${s.done<s.n?`<p class="note">Còn ${s.n-s.done} dòng chưa kiểm; phần dưới cơ số đang tạm tính các dòng đó theo sổ sách.</p>`:''}
+  <div class="kpi a"><b>${s.exp}</b><span>lô cận hạn ≤ 6 tháng</span></div><div class="kpi r"><b>${short.length}</b><span>thuốc thiếu cơ số</span></div><div class="kpi a"><b>${over.length}</b><span>thuốc thừa cơ số</span></div></div>
+  ${s.done<s.n?`<p class="note">Còn ${s.n-s.done} dòng chưa kiểm; phần so với cơ số đang tạm tính các dòng đó theo sổ sách.</p>`:''}
+  <div class="card"><h3>So với cơ số được duyệt</h3>
+  <p class="note">Tổng thực tế mọi lô của từng thuốc so với cơ số. Đánh dấu "Đã rà" khi đã xem xong từng thuốc.</p>
+  <div class="chips" id="sumChips"><button data-sf="short" aria-pressed="${sumF=='short'}">Thiếu (${short.length})</button><button data-sf="over" aria-pressed="${sumF=='over'}">Thừa (${over.length})</button><button data-sf="all" aria-pressed="${sumF=='all'}">Tất cả (${cs.length})</button></div>
+  ${csList.length?`<table class="stack"><thead><tr><th>Đã rà</th><th>Thuốc</th><th class="n">Số lô</th><th class="n">Cơ số</th><th class="n">Sổ sách</th><th class="n">Thực tế</th><th class="n">So với cơ số</th></tr></thead><tbody>
+  ${csList.map(r=>`<tr${rv[r.ma]?' style="opacity:.55"':''}><td><input type="checkbox" data-rv="${esc(r.ma)}" ${rv[r.ma]?'checked':''} aria-label="Đã rà" style="width:22px;height:22px"></td>
+  <td><b>${esc(r.ten)}</b><div class="note">Mã ${esc(r.ma)} · ${esc(r.g)}${r.done?'':' · <span style="color:var(--amber)">tạm tính</span>'}</div></td>
+  <td class="n">${r.lots}</td><td class="n">${r.coso}</td><td class="n">${r.ss}</td><td class="n">${r.tt}</td>
+  <td class="n" style="font-weight:700;color:var(--${r.d<0?'brick':r.d>0?'amber':'ok'})">${r.d<0?'Thiếu '+(-r.d):r.d>0?'Thừa '+r.d:'Đủ'} ${r.d?esc(r.dvt):''}</td></tr>`).join('')}</tbody></table>`
+  :`<p class="note">${sumF=='short'?'Không có thuốc nào thiếu cơ số.':sumF=='over'?'Không có thuốc nào thừa cơ số.':'Chưa có dữ liệu.'}</p>`}
+  <div class="tools" style="margin-top:10px"><button class="btn" type="button" id="csCopy">Sao chép danh sách thiếu/thừa</button></div></div>
   <div class="card"><h3>Chênh lệch sổ sách – thực tế</h3>${tbl('<th>Thuốc</th><th>Lô</th><th class="n">Sổ sách</th><th class="n">Thực tế</th><th class="n">Chênh</th>',
     diff.map(i=>`<tr><td>${esc(i.ten)}${i.added?' <span class="tag new">Lô mới</span>':''}</td><td>${esc(i.lo)}</td><td class="n">${i.ss}</td><td class="n">${i.tt}</td><td class="n dv">${i.tt-i.ss>0?'+':''}${i.tt-i.ss}</td></tr>`),'Chưa có dòng nào lệch.')}</div>
-  <div class="card"><h3>Dưới cơ số – cần bù</h3>${tbl('<th>Mã</th><th>Thuốc</th><th class="n">Cơ số</th><th class="n">Thực tế</th><th class="n">Cần bù</th>',
-    under.map(r=>`<tr><td>${esc(r.ma)}</td><td>${esc(r.ten)}</td><td class="n">${r.coso}</td><td class="n">${r.tt}</td><td class="n dv">${r.coso-r.tt} ${esc(r.dvt)}</td></tr>`),'Tất cả thuốc đủ cơ số.')}</div>
   <div class="card"><h3>Cận hạn dùng</h3>${tbl('<th>Thuốc</th><th>Lô</th><th>Hạn dùng</th><th class="n">Còn</th>',
     exp.map(i=>{const m=monthsLeft(i);return `<tr><td>${esc(i.ten)}</td><td>${esc(i.lo)}</td><td>${esc(i.hd)}</td><td class="n" style="color:var(--${expLvl(i)==2?'brick':'amber'})">${m<0?'Đã hết hạn':Math.floor(m)+' tháng'}</td></tr>`}),'Không có lô nào hết hạn trong 6 tháng tới.')}</div>
   ${hv.length?`<div class="card"><h3>Hỏng / vỡ</h3>${tbl('<th>Thuốc</th><th>Lô</th><th class="n">SL</th><th>Ghi chú</th>',hv.map(i=>`<tr><td>${esc(i.ten)}</td><td>${esc(i.lo)}</td><td class="n">${i.hv}</td><td>${esc(i.note)}</td></tr>`),'')}</div>`:''}
   ${added.length?`<div class="card"><h3>Lô phát hiện thêm (không có trong sổ sách)</h3>${tbl('<th>Thuốc</th><th>Lô</th><th>Hạn dùng</th><th class="n">Thực tế</th>',added.map(i=>`<tr><td>${esc(i.ten)}</td><td>${esc(i.lo)}</td><td>${esc(i.hd)}</td><td class="n">${i.tt??''}</td></tr>`),'')}</div>`:''}`;
 }
 
+$('#t-sum').addEventListener('click',async e=>{
+  const c=e.target.closest('[data-sf]');if(c){sumF=c.dataset.sf;renderSum();return}
+  if(e.target.id=='csCopy'){const rows=coSoRows().filter(r=>r.d!=0);
+    const txt=['Mã\tThuốc\tCơ số\tThực tế\tChênh\tTình trạng'].concat(rows.map(r=>[r.ma,r.ten,r.coso,r.tt,r.d,(r.d<0?'Thiếu ':'Thừa ')+Math.abs(r.d)+' '+r.dvt+(r.done?'':' (tạm tính)')].join('\t'))).join('\n');
+    try{await navigator.clipboard.writeText(txt);toast('Đã sao chép '+rows.length+' thuốc')}catch(err){toast('Trình xem chặn sao chép')}}});
+$('#t-sum').addEventListener('change',e=>{const m=e.target.dataset.rv;if(m==null)return;S.meta.rv=S.meta.rv||{};if(e.target.checked)S.meta.rv[m]=true;else delete S.meta.rv[m];save();renderSum()});
 /* ---------- info ---------- */
 function renderInfo(){
   const m=S.meta;
@@ -702,8 +721,8 @@ $('#xXlsx').addEventListener('click',async()=>{
   const ws=XLSX.utils.aoa_to_sheet(A);ws['!merges']=merges;
   ws['!cols']=[5,8,42,9,13,12,11,7,8,8,8,24].map(w=>({wch:w}));
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Bien ban');
-  const sum=[['Mã','Tên thuốc','Cơ số','Thực tế','Cần bù']].concat(byMa().filter(r=>r.tt<r.coso).map(r=>[r.ma,r.ten,r.coso,r.tt,r.coso-r.tt]));
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sum),'Can bu co so');
+  const sum=[['Mã','Tên thuốc','Số lô','Cơ số','Sổ sách','Thực tế','Chênh so với cơ số','Tình trạng']].concat(coSoRows().filter(r=>r.d!=0).sort((a,b)=>a.d-b.d).map(r=>[r.ma,r.ten,r.lots,r.coso,r.ss,r.tt,r.d,(r.d<0?'Thiếu ':'Thừa ')+Math.abs(r.d)+' '+r.dvt+(r.done?'':' (tạm tính)')]));
+  const ws2=XLSX.utils.aoa_to_sheet(sum);ws2['!cols']=[6,40,6,7,8,8,10,22].map(w=>({wch:w}));XLSX.utils.book_append_sheet(wb,ws2,'So voi co so');
   const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});saveFile(fname('xlsx'),new Uint8Array(buf));
 });
 async function exportPdf(bytes){
@@ -822,7 +841,7 @@ $('#bkLoad').addEventListener('change',async e=>{const f=e.target.files[0];e.tar
 $('#impFile').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';importFile(f)});
 $('#newRound').addEventListener('click',()=>confirmDlg('Xoá kết quả đếm, ghi chú, lô phát hiện thêm và ý kiến Khoa Dược của tủ này; giữ danh mục và tổ kiểm kê?',()=>{
   S.items=S.items.filter(i=>!i.added);S.items.forEach(i=>{i.tt=null;i.hv=0;i.note='';i.vf='';i.vfTxt=''});S.dp=DP_ITEMS.map(()=>({r:'',note:''}));
-  Object.assign(S.meta,{ngay:today(),start:'',end:'',so:''});open.clear();save();renderHead();toast('Đã bắt đầu đợt mới')}));
+  Object.assign(S.meta,{ngay:today(),start:'',end:'',so:'',rv:{}});open.clear();save();renderHead();toast('Đã bắt đầu đợt mới')}));
 
 renderHead();renderList();
 (async()=>{try{DL=await window.claude?.use?.('downloads')}catch(e){DL=null}
