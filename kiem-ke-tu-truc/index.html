@@ -539,7 +539,17 @@ function expectedDateIn(text,hd){
   for(const [re,full] of tries){const x=new RegExp(re).exec(t);if(x)return {y:+Y,m,d:full?d:null,raw:x[0].trim()}}
   return null;
 }
-function hdFound(text,hd){return dateMatch(findDates(text),hd)||expectedDateIn(text,hd)}
+// So hạn dùng: chỉ "Khớp" khi đúng đủ ngày/tháng/năm
+function hdCheck(text,hd){
+  const e=parseD(hd);if(!e)return {st:null,o:null};
+  const Y=e.getFullYear(),M=e.getMonth()+1,D=e.getDate(),ds=findDates(text);
+  let x=ds.all.find(o=>o.y==Y&&o.m==M&&o.d==D);if(x)return {st:'ok',o:x};
+  const ex=expectedDateIn(text,hd);if(ex&&ex.d)return {st:'ok',o:ex};
+  x=ds.all.find(o=>o.y==Y&&o.m==M&&o.d&&o.d!=D);if(x)return {st:'diffday',o:x};
+  x=ex||ds.all.find(o=>o.y==Y&&o.m==M);if(x)return {st:'month',o:x};
+  return {st:'no',o:ds.best};
+}
+function hdFound(text,hd){const r=hdCheck(text,hd);return r.st=='ok'?r.o:null}
 async function getOCR(){
   if(OCRW)return OCRW;
   if(!window.Tesseract)await loadScript('tess/tesseract.min.js');
@@ -600,7 +610,7 @@ function fileToDataURL(file){return new Promise(ok=>{const r=new FileReader();r.
 async function thumbOf(file){const {img,url}=await loadImg(file);const sc=Math.min(1,600/Math.max(img.naturalWidth,img.naturalHeight));
   const c=document.createElement('canvas');c.width=img.naturalWidth*sc;c.height=img.naturalHeight*sc;c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);return c.toDataURL('image/jpeg',.8)}
 function vfRender(it,st){
-  const mk=v=>v===true?'<span class="mk y">Khớp</span>':v===false?'<span class="mk n">Khác</span>':v=='near'?'<span class="mk u">Gần giống – xem ảnh</span>':'<span class="mk u">Chưa đọc được</span>';
+  const mk=v=>v===true?'<span class="mk y">Khớp</span>':v===false?'<span class="mk n">Khác</span>':v=='near'?'<span class="mk u">Gần giống – xem ảnh</span>':v=='diffday'?'<span class="mk u">Khác ngày – xem ảnh</span>':v=='month'?'<span class="mk u">Chỉ đọc được tháng/năm</span>':'<span class="mk u">Chưa đọc được</span>';
   df.innerHTML=`<h3>Đối chiếu lô, hạn dùng</h3><div class="nm">${esc(it.ten)}</div>
   ${st.thumb?`<img class="thumb" src="${st.thumb}" alt="Ảnh vừa chụp">`:''}
   ${st.busy?`<div class="busy"><i></i><span>${esc(st.busy)}</span></div>`:`
@@ -611,13 +621,15 @@ function vfRender(it,st){
   <p class="note">Kết quả đọc chữ có thể sai với chữ dập nổi hoặc in phun – hãy nhìn lại ảnh.</p>
   ${st.lotOK===true&&st.hdOK===true?'<p><b style="color:var(--ok)">Lô và hạn dùng khớp – đã ghi nhận.</b></p>':''}
   ${st.otherId?`<p><b style="color:var(--brick)">Lọ này là lô ${esc(st.lo)} – lô khác của cùng thuốc, đang ở thẻ khác trong danh sách.</b></p>`:''}
+  ${st.hdOK=='diffday'?`<p class="note">Tháng/năm trùng nhưng ngày đọc được (${esc(st.hd)}) khác sổ sách (${esc(it.hd)}). Có thể do đọc nhầm một chữ số – nhìn ảnh rồi chọn Xác nhận đúng hoặc Ghi nhận lệch.</p>`:''}
+  ${st.hdOK=='month'?`<p class="note">Chỉ đọc chắc được tháng/năm, chưa đọc rõ ngày. Nhìn ảnh: nếu hạn dùng in đúng ${esc(it.hd)} (hoặc nhãn chỉ in tháng/năm) thì bấm Xác nhận đúng; nếu không thì chụp lại gần hơn.</p>`:''}
   ${st.lotOK=='near'?'<p class="note">Chỉ lệch 1 ký tự so với sổ sách – thường do đọc nhầm. Nhìn ảnh rồi bấm Xác nhận đúng nếu đúng lô.</p>':''}
   ${st.err?`<p class="note" style="color:var(--brick)">${esc(st.err)}</p>`:''}
   ${st.text?`<details><summary class="note">Chữ đọc được</summary><pre>${esc(st.text)}</pre></details>`:''}`}
   <div class="acts">
   ${st.busy?'<button class="btn" value="no">Huỷ</button>':`
-  ${st.lotOK===true&&st.hdOK===true?'<button class="btn pri" value="no">Xong</button>':`<button class="btn${st.lotOK===false||st.hdOK===false?'':' pri'}" type="button" data-v="ok">Xác nhận đúng</button>`}
-  ${st.lotOK===false||st.hdOK===false?'<button class="btn red" type="button" data-v="bad">Ghi nhận lệch</button><button class="btn" type="button" data-v="add">Thêm thành lô mới</button>':''}
+  ${st.lotOK===true&&st.hdOK===true?'<button class="btn pri" value="no">Xong</button>':`<button class="btn${st.lotOK===false||st.hdOK===false||st.hdOK=='diffday'?'':' pri'}" type="button" data-v="ok">Xác nhận đúng</button>`}
+  ${st.lotOK===false||st.hdOK===false||st.hdOK=='diffday'?'<button class="btn red" type="button" data-v="bad">Ghi nhận lệch</button><button class="btn" type="button" data-v="add">Thêm thành lô mới</button>':''}
   ${st.otherId?'<button class="btn" type="button" data-v="jump">Đến thẻ lô đó</button>':''}
   <button class="btn" type="button" data-v="again">Chụp lại</button>`}</div>`;
 }
@@ -633,10 +645,10 @@ $('#vfFile').addEventListener('change',async e=>{
     if(v=='jump'){dlg.close();goTo(st.otherId)}};
   {
     try{const txt=await ocrAll(f,t=>lotIn(t,it.lo)&&!!hdFound(t,it.hd),(i,n)=>{if(alive&&i>1){st.busy=`Đang thử cách đọc ${i}/${n} (xoay ảnh, tăng nét chữ)…`;vfRender(it,st)}});if(!alive)return;
-      st.src='ocr';st.text=txt.trim();const ds=findDates(txt),dm=hdFound(txt,it.hd);
+      st.src='ocr';st.text=txt.trim();const ds=findDates(txt);
       st.dates=[...new Set(ds.all.map(fmtD))].slice(0,6);
       Object.assign(st,analyzeLot(txt,it));
-      if(dm){st.hdOK=true;st.hd=fmtD(dm)}else{st.hd=fmtD(ds.best);st.hdOK=ds.best?false:null}
+      const hc=hdCheck(txt,it.hd);st.hd=fmtD(hc.o);st.hdOK=hc.st=='ok'?true:hc.st=='diffday'?'diffday':hc.st=='month'?'month':(hc.o?false:null);
       if(st.otherId){const o=byId(st.otherId);if(o&&hdFound(txt,o.hd))st.hd=o.hd}
     }catch(err){if(!alive)return;st.src='ocr';st.lotOK=null;st.hdOK=null;st.err=err&&err.timeout?'Đọc chữ quá lâu nên đã dừng. Chụp lại gần hơn, chỉ lấy vùng in lô/HD, hoặc so bằng mắt với ảnh.':'Bộ đọc chữ gặp lỗi trên máy này. Hãy chụp lại, hoặc so bằng mắt với ảnh rồi bấm Xác nhận đúng / Ghi nhận lệch.';st.text=String(err&&err.message||err||'')}}
   st.busy='';
