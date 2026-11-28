@@ -1,5 +1,5 @@
 // Đọc biên bản kiểm kê tủ trực (mẫu 11D/BV-01) từ PDF bằng toạ độ chữ
-async function parseCabinetPDF(buf){
+async function parseCabinetPDF(buf,wantLayout){
   if(!window.pdfjsLib){await new Promise((ok,no)=>{const s=document.createElement('script');s.src='pdfjs/pdf.min.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
   const pw=document.getElementById('pdf-worker');
   if(pw){if(!window._pdfW)window._pdfW=URL.createObjectURL(new Blob([pw.textContent],{type:'text/javascript'}));pdfjsLib.GlobalWorkerOptions.workerSrc=window._pdfW}
@@ -7,11 +7,12 @@ async function parseCabinetPDF(buf){
   const pdf=await pdfjsLib.getDocument({data:buf,isEvalSupported:false}).promise;
   const F=s=>String(s).normalize('NFC');
   const fold=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/gi,'d').toLowerCase();
-  const rows=[];let tu='',group='',stop=false,cols=null;
+  const rows=[],rowPos=[],pagesL=[];let tu='',group='',stop=false,cols=null;
   for(let p=1;p<=pdf.numPages&&!stop;p++){
     const page=await pdf.getPage(p);const vp=page.getViewport({scale:1});
     const tc=await page.getTextContent();
-    let items=tc.items.filter(i=>i.str&&i.str.trim()).map(i=>({s:F(i.str).trim(),x:i.transform[4],y:vp.height-i.transform[5],w:i.width}));
+    let items=tc.items.filter(i=>i.str&&i.str.trim()).map(i=>({s:F(i.str).trim(),x:i.transform[4],y:vp.height-i.transform[5],b:i.transform[5],h:Math.hypot(i.transform[2],i.transform[3])||i.height||10,w:i.width}));
+    pagesL[p-1]={items,h:vp.height,w:vp.width,cols:null};
     // gộp các mảnh chữ liền nhau cùng dòng
     items.sort((a,b)=>a.y-b.y||a.x-b.x);
     const lines=[];for(const it of items){let L=lines.find(l=>Math.abs(l.y-it.y)<2.5);if(!L){L={y:it.y,items:[]};lines.push(L)}L.items.push(it)}
@@ -23,6 +24,7 @@ async function parseCabinetPDF(buf){
     // dòng đánh số cột 1..12
     const numLine=lines.find(l=>{const v=l.items.map(i=>i.s);return v.length>=10&&v.slice(0,10).every((s,k)=>s==String(k+1))});
     if(numLine){cols=numLine.items.slice(0,12).map(i=>i.x+i.w/2)}
+    pagesL[p-1].cols=cols;
     if(!cols)continue;
     const colOf=x=>{let best=0,d=1e9;cols.forEach((c,k)=>{const dd=Math.abs(c-x);if(dd<d){d=dd;best=k}});return best};
     const bounds=cols.map((c,k)=>k?(c+cols[k-1])/2:-1e9);
@@ -33,12 +35,12 @@ async function parseCabinetPDF(buf){
       const t=fold(l.items.map(i=>i.s).join(' '));if(/y kien khoa duoc/.test(t)){stop=true;break}
       if(/^(so|tt|ma ky|thuat|ten thuoc|1 2 3)/.test(t)&&!numLine)continue;
       // tách mảnh theo cột (cột tên có thể chứa nhiều mảnh)
-      const cells={};let k=0;const L=l.items;
+      const cells={},ci={};let k=0;const L=l.items;
       // STT và Mã: số nguyên ở bên trái, trước phần tên thuốc
       if(L[k]&&/^\d+$/.test(L[k].s)&&L[k].x<cols[1]){(cells[0]=[]).push(L[k].s);k++;
         if(L[k]&&/^\d+$/.test(L[k].s)&&L[k].x+L[k].w<cols[1]+(cols[2]-cols[1])*0.35){(cells[1]=[]).push(L[k].s);k++}}
-      for(;k<L.length;k++){const i=L[k];const c=i.x+i.w/2<bounds[3]?2:colOf(i.x+i.w/2);(cells[c]=cells[c]||[]).push(i.s)}
-      body.push({y:l.y,x0:L[0].x,cells,t})}
+      for(;k<L.length;k++){const i=L[k];const c=i.x+i.w/2<bounds[3]?2:colOf(i.x+i.w/2);(cells[c]=cells[c]||[]).push(i.s);(ci[c]=ci[c]||[]).push(i)}
+      body.push({y:l.y,b:L[0].b,x0:L[0].x,cells,ci,t})}
     // phân loại: dòng neo (có STT ở cột 1 + số ở cột cơ số/sổ sách), dòng nhóm, dòng nối
     const isInt=s=>/^\d+$/.test(s||'');
     const anchors=body.filter(b=>isInt((b.cells[0]||[]).join(''))&&(b.cells[7]||b.cells[8]));
@@ -72,8 +74,9 @@ async function parseCabinetPDF(buf){
       if(b.cells[1]&&!r.ma)r.ma=b.cells[1].join('');}
     const join=(arr,sep)=>arr.sort((a,b)=>a[0]-b[0]).map(a=>a[1]).filter(Boolean).join(sep).replace(/\s+/g,' ').trim();
     for(const a of anchors){const r=a.rec;
+      rowPos.push({page:p-1,y:a.y,b:(a.ci[7]||a.ci[8]||[{b:a.b}])[0].b,tt:(a.ci[9]||[])[0]||null,hv:(a.ci[10]||[])[0]||null,ys:body.filter(x=>x===a||(x.cont&&Math.abs(x.y-a.y)<=16)).map(x=>x.y)});
       rows.push([r.g||'Chưa phân nhóm',r.ma,join(r.ten,' '),join(r.dvt,'').replace(/\/\s*/g,'/'),join(r.lo,''),join(r.nuoc,' '),r.hd,parseInt(r.coso)||0,parseInt(r.ss)||0])}
     group=g;
   }
-  return {tu,rows};
+  return wantLayout?{tu,rows,rowPos,pages:pagesL}:{tu,rows};
 }

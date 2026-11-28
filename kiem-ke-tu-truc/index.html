@@ -173,9 +173,11 @@ dialog::backdrop{background:rgb(0 0 0/.45)}
   <section id="t-data" hidden>
     <div class="card">
       <h3>Xuất biên bản</h3>
+      <p class="note"><b>Biên bản PDF:</b> điền số thực tế, hỏng/vỡ, ghi chú, tổ kiểm kê, thời gian và ý kiến Khoa Dược vào chính file PDF đã nạp – giữ nguyên bố cục. Lô phát sinh (không có trong sổ sách) được ghi vào cột Ghi chú của lô cùng thuốc đang thiếu số lượng.</p>
       <p class="note">Biên bản Excel theo mẫu 11D/BV-01: 12 cột như bản giấy, có tổ kiểm kê, thời gian và ý kiến Khoa Dược. Bản HTML mở bằng trình duyệt để in khổ A4 ngang.</p>
       <div class="tools">
-        <button class="btn pri" id="xXlsx">Tải biên bản Excel</button>
+        <button class="btn pri" id="xPdf">Tải biên bản PDF (điền vào mẫu gốc)</button>
+        <button class="btn" id="xXlsx">Tải biên bản Excel</button>
         <button class="btn" id="xHtml">Tải bản in (HTML)</button>
         <button class="btn" id="xCopy">Sao chép bảng</button>
       </div>
@@ -208,6 +210,7 @@ dialog::backdrop{background:rgb(0 0 0/.45)}
 <div class="fab"><button class="btn pri" id="scanBtn">Chụp nhãn tìm lô</button></div>
 <input type="file" id="scanFile" accept="image/*" capture="environment" hidden>
 <input type="file" id="vfFile" accept="image/*" capture="environment" hidden>
+<input type="file" id="pdfOrig" accept=".pdf,application/pdf" hidden>
 
 <dialog id="dlg"><form class="dlg" id="dlgForm" method="dialog"></form></dialog>
 <div class="toast" id="toast" role="status"></div>
@@ -220,6 +223,7 @@ if('serviceWorker' in navigator){addEventListener('load',()=>{navigator.serviceW
 </script>
 <script src="data.js"></script>
 <script src="pdfparse.js"></script>
+<script src="pdffill.js"></script>
 <script>
 {
 const KEY='kk-tutruc-v1';
@@ -624,6 +628,19 @@ $('#xXlsx').addEventListener('click',async()=>{
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sum),'Can bu co so');
   const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});saveFile(fname('xlsx'),new Uint8Array(buf));
 });
+async function exportPdf(bytes){
+  $('#dlNote').textContent='Đang điền biên bản PDF…';
+  try{const out=await fillCabinetPDF(bytes,S,DP_ITEMS);$('#dlNote').textContent='';await saveFile(fname('pdf'),out)}
+  catch(e){$('#dlNote').textContent='Lỗi: '+(e.message||e)}
+}
+$('#xPdf').addEventListener('click',async()=>{
+  const b=await PDFStore.get(DB.cur);
+  if(b)return exportPdf(b);
+  $('#dlNote').textContent='Chưa có file PDF gốc của tủ này trên máy – hãy chọn lại file PDF biên bản đã nạp.';$('#pdfOrig').click();
+});
+$('#pdfOrig').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const b=new Uint8Array(await f.arrayBuffer());
+  try{await fillCabinetPDF(b.slice(0),S,DP_ITEMS)}catch(err){$('#dlNote').textContent='Lỗi: '+(err.message||err);return}
+  await PDFStore.put(DB.cur,b);S.meta.pdf=true;save();exportPdf(b)});
 $('#xHtml').addEventListener('click',()=>{
   const m=S.meta,e=esc;
   const rows=tableRows().map(x=>x.g?`<tr><td colspan="12" class="g">${e(x.g)}</td></tr>`:`<tr>${x.r.map((v,i)=>`<td${[0,7,8,9,10].includes(i)?' class="c"':''}>${e(v)}</td>`).join('')}</tr>`).join('');
@@ -668,10 +685,10 @@ async function parseExcel(f){
 }
 function normHd(hd){const m=String(hd||'').trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);return m?`${pad(m[1])}/${pad(m[2])}/${m[3].length==2?'20'+m[3]:m[3]}`:String(hd||'').trim()}
 async function importFile(f){
-  if(!f)return;toast('Đang đọc '+f.name+'…');$('#impNote').textContent='Đang đọc '+f.name+'…';
+  if(!f)return;let pdfBytes=null;toast('Đang đọc '+f.name+'…');$('#impNote').textContent='Đang đọc '+f.name+'…';
   let r;
   try{
-    if(/\.pdf$/i.test(f.name)||f.type=='application/pdf')r=await parseCabinetPDF(await f.arrayBuffer());
+    if(/\.pdf$/i.test(f.name)||f.type=='application/pdf'){pdfBytes=new Uint8Array(await f.arrayBuffer());r=await parseCabinetPDF(pdfBytes.slice(0))}
     else r=await parseExcel(f);
     r.rows.forEach(x=>{x[6]=normHd(x[6])});
     if(!r.rows.length)throw new Error('Không tìm thấy dòng thuốc nào. File có đúng mẫu biên bản kiểm kê tủ trực (có dòng đánh số cột 1–12) không?');
@@ -692,7 +709,7 @@ async function importFile(f){
   dlg.returnValue='';dlg.onclose=()=>{if(dlg.returnValue!='yes')return;
     const tu=$('#nbTu').value.trim()||name;const ex=findTu(tu);const id=ex||(S.items.length?'t'+Date.now():DB.cur);
     const prev=S;const ns=fromRows(tu,r.rows);ns.meta.members=JSON.parse(JSON.stringify(prev.meta.members||ns.meta.members));
-    DB.tus[id]=ns;switchTu(id);toast(`Đã tạo tủ ${tu} – ${r.rows.length} dòng`)};
+    DB.tus[id]=ns;if(pdfBytes){ns.meta.pdf=true;PDFStore.put(id,pdfBytes)}else PDFStore.del(id);switchTu(id);toast(`Đã tạo tủ ${tu} – ${r.rows.length} dòng`)};
   dlg.showModal();
 }
 function findTu(name){const n=fold(name).replace(/\s+/g,' ').trim();return Object.keys(DB.tus).find(k=>fold(DB.tus[k].meta.tu).replace(/\s+/g,' ').trim()==n)||null}
@@ -708,18 +725,20 @@ function tuDlg(){
   df.onclick=e=>{const o=e.target.closest('[data-open]'),d=e.target.closest('[data-del]');
     if(o){dlg.close();switchTu(o.dataset.open)}
     if(d){const id=d.dataset.del;if(Object.keys(DB.tus).length==1){toast('Phải còn ít nhất 1 tủ');return}
-      if(d.dataset.sure){delete DB.tus[id];if(DB.cur==id)DB.cur=Object.keys(DB.tus)[0];S=DB.tus[DB.cur];save();renderHead();if(tab=='list')renderList();tuDlg()}
+      if(d.dataset.sure){delete DB.tus[id];PDFStore.del(id);if(DB.cur==id)DB.cur=Object.keys(DB.tus)[0];S=DB.tus[DB.cur];save();renderHead();if(tab=='list')renderList();tuDlg()}
       else{d.dataset.sure=1;d.textContent='Chắc chắn xoá?'}}
     if(e.target.id=='tuNew'){dlg.close();$('#impFile').click()}};
   dlg.onclose=()=>{df.onclick=null};dlg.returnValue='';dlg.showModal();
 }
 $('#tuBtn').addEventListener('click',tuDlg);
 $('#list').addEventListener('click',e=>{if(e.target.id=='firstImp')$('#impFile').click()});
-$('#bkSave').addEventListener('click',()=>saveFile(`Sao_luu_kiem_ke_tu_truc_${today()}.json`,JSON.stringify(DB)));
+$('#bkSave').addEventListener('click',async()=>{const pdfs={};
+  for(const id of Object.keys(DB.tus)){const b=await PDFStore.get(id);if(b){let s='';for(let i=0;i<b.length;i+=32768)s+=String.fromCharCode.apply(null,b.subarray(i,i+32768));pdfs[id]=btoa(s)}}
+  saveFile(`Sao_luu_kiem_ke_tu_truc_${today()}.json`,JSON.stringify({...DB,pdfs}))});
 $('#bkLoad').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
   try{const d=JSON.parse(await f.text());if(!d||!d.tus||!d.tus[d.cur])throw 0;const n=Object.keys(d.tus).length;
     confirmDlg(`Khôi phục ${n} tủ từ file sao lưu? Tủ trùng tên trên máy này sẽ được thay; tủ khác giữ nguyên.`,()=>{
-      for(const [id,t] of Object.entries(d.tus)){const ex=findTu(t.meta.tu);DB.tus[ex||id]=t}
+      for(const [id,t] of Object.entries(d.tus)){const ex=findTu(t.meta.tu),nid=ex||id;DB.tus[nid]=t;if(d.pdfs&&d.pdfs[id])PDFStore.put(nid,Uint8Array.from(atob(d.pdfs[id]),c=>c.charCodeAt(0)))}
       switchTu(findTu(d.tus[d.cur].meta.tu)||DB.cur);toast(`Đã khôi phục ${n} tủ`)})}
   catch(err){toast('File sao lưu không hợp lệ')}});
 $('#impFile').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';importFile(f)});
