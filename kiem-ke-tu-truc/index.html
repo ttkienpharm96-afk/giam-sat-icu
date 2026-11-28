@@ -82,6 +82,9 @@ h2{font-size:15px;margin:20px 0 6px;color:var(--mute);font-weight:700;display:fl
 details pre{white-space:pre-wrap;font-size:12px;background:var(--chip);padding:8px;border-radius:6px;max-height:160px;overflow:auto}
 .tag{display:inline-block;font-size:12px;padding:1px 6px;border-radius:4px;background:var(--chip);color:var(--mute);margin-left:4px}
 .tag.new{background:var(--brick);color:#fff}
+.cs{margin-top:8px;padding:7px 10px;border-radius:6px;background:var(--diffbg);border:1px solid var(--brick);color:var(--ink);font-size:14px;line-height:1.35}
+.cs b{color:var(--brick)}
+.cs .note{display:block}
 .ctl{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
 .nums{font-size:14px;color:var(--mute);margin-right:auto;font-variant-numeric:tabular-nums;white-space:nowrap}
 .nums b{color:var(--ink)}
@@ -163,6 +166,7 @@ dialog::backdrop{background:rgb(0 0 0/.45)}
       <button data-f="todo" aria-pressed="false">Chưa kiểm</button>
       <button data-f="diff" aria-pressed="false">Lệch</button>
       <button data-f="exp" aria-pressed="false">Cận hạn ≤ 6 tháng</button>
+      <button data-f="under" aria-pressed="false">Thiếu cơ số</button>
       <button data-f="nvf" aria-pressed="false">Chưa đối chiếu lô</button>
       <button data-f="new" aria-pressed="false">Lô phát hiện thêm</button>
     </div>
@@ -267,9 +271,12 @@ function renderHead(){
   $('#sub').textContent=`${S.meta.tu} · ${S.meta.ngay.split('-').reverse().join('/')}`;
   const w=x=>(s.n?x/s.n*100:0).toFixed(2)+'%';
   $('#prog').innerHTML=`<i style="width:${w(s.ok)};background:var(--ok)"></i><i style="width:${w(s.diff)};background:var(--brick)"></i>`;
-  $('#stats').innerHTML=`<span>Đã kiểm <b>${s.done}/${s.n}</b></span><span class="r">Lệch <b>${s.diff}</b></span><span class="a">Cận hạn <b>${s.exp}</b></span><span>Đã đối chiếu lô <b>${s.vf}/${s.lots}</b></span><span>Hỏng/vỡ <b>${s.hv}</b></span>`;
+  $('#stats').innerHTML=`<span>Đã kiểm <b>${s.done}/${s.n}</b></span><span class="r">Lệch <b>${s.diff}</b></span><span class="r">Thiếu cơ số <b>${underList().length}</b></span><span class="a">Cận hạn <b>${s.exp}</b></span><span>Đã đối chiếu lô <b>${s.vf}/${s.lots}</b></span><span>Hỏng/vỡ <b>${s.hv}</b></span>`;
 }
 
+function maInfo(ma){const arr=S.items.filter(i=>i.ma==ma);const coso=Math.max(0,...arr.map(i=>+i.coso||0));
+  const tt=arr.reduce((a,i)=>a+(i.tt??i.ss),0);return {coso,tt,done:arr.every(i=>i.tt!=null),short:coso-tt,last:arr[arr.length-1],first:arr.find(i=>!i.added)||arr[0],dvt:arr[0].dvt,n:arr.length}}
+function underList(){const seen=new Set(),out=[];for(const i of S.items){if(seen.has(i.ma))continue;seen.add(i.ma);const m=maInfo(i.ma);if(m.coso>0&&m.short>0)out.push(m)}return out}
 function card(it){
   const st=status(it),lv=expLvl(it),d=it.tt==null?'':it.tt-it.ss;
   const dTxt=it.tt==null?'':d===0?'<span class="dv ok">Khớp</span>':`<span class="dv">${d>0?'+':''}${d}</span>`;
@@ -286,6 +293,8 @@ function card(it){
   ${open.has(it.id)?`<div class="more"><span>Hỏng/vỡ</span><input data-f="hv" inputmode="numeric" value="${+it.hv||''}" placeholder="0">
   <span>Ghi chú</span><input data-f="note" value="${esc(it.note)}" placeholder="VD: lô khác sổ sách, đã báo ĐD trưởng">
   <div class="acts"><button class="btn" type="button" data-a="addlot">Thêm lô khác của thuốc này</button>${it.added?'<button class="btn red" type="button" data-a="del">Xoá dòng này</button>':''}</div></div>`:''}
+  ${(()=>{const m=maInfo(it.ma);if(m.last!==it||!(m.coso>0&&m.short>0))return '';
+    return `<div class="cs">${m.n>1?`Tổng ${m.n} lô: `:''}thực tế ${m.tt} / cơ số ${m.coso} → <b>thiếu ${m.short} ${esc(m.dvt)} so với cơ số được duyệt</b>${m.done?'':'<span class="note">Tạm tính – còn lô chưa kiểm được tính theo sổ sách.</span>'}</div>`})()}
   </article>`;
 }
 function visible(it){
@@ -295,6 +304,7 @@ function visible(it){
   if(filt=='exp')return expLvl(it)>0;
   if(filt=='new')return it.added;
   if(filt=='nvf')return !!it.lo&&it.vf!='ok';
+  if(filt=='under'){const m=maInfo(it.ma);return m.coso>0&&m.short>0}
   return true;
 }
 function renderList(){
@@ -304,13 +314,15 @@ function renderList(){
     return `<h2><span>${esc(g)}</span><span class="grp-done">${dn}/${all.length}</span></h2>${arr.map(card).join('')}`}).join('')
     :S.items.length?'<div class="empty">Không có dòng nào khớp bộ lọc.</div>':'<div class="empty"><p>Chưa có danh mục thuốc cho tủ này.</p><button class="btn pri" type="button" id="firstImp">Nạp PDF biên bản kiểm kê</button></div>';
 }
-function refreshCard(it){const el=document.getElementById('c-'+it.id);if(el)el.outerHTML=card(it);renderHead();save()}
+function refreshCard(it){for(const x of S.items.filter(i=>i.ma==it.ma)){const el=document.getElementById('c-'+x.id);if(el)el.outerHTML=card(x)}renderHead();save()}
+function warnCoSo(it,was){const m=maInfo(it.ma);if(m.done&&m.coso>0&&m.short>0&&!was)toast(`${it.ten}: thiếu ${m.short} ${m.dvt} so với cơ số ${m.coso} – cần bù`)}
 function byId(id){return S.items.find(i=>i.id==id)}
 function touchStart(){if(!S.meta.start){S.meta.start=nowLocal()}}
 
 $('#list').addEventListener('click',e=>{
   const b=e.target.closest('[data-a]');if(!b)return;const it=byId(b.closest('.it').dataset.id);if(!it)return;
-  const a=b.dataset.a;
+  const a=b.dataset.a;const was=(()=>{const m=maInfo(it.ma);return m.done&&m.short>0})();
+  if(['ok','inc','dec'].includes(a))setTimeout(()=>warnCoSo(it,was),0);
   if(a=='ok'){it.tt=it.ss;touchStart()}
   else if(a=='inc'){it.tt=(it.tt??it.ss)+1;touchStart()}
   else if(a=='dec'){it.tt=Math.max(0,(it.tt??it.ss)-1);touchStart()}
@@ -322,7 +334,7 @@ $('#list').addEventListener('click',e=>{
 });
 $('#list').addEventListener('change',e=>{
   const f=e.target.dataset.f;if(!f)return;const it=byId(e.target.closest('.it').dataset.id);
-  if(f=='tt'){const v=e.target.value.trim();it.tt=v===''?null:Math.max(0,parseInt(v)||0);touchStart()}
+  if(f=='tt'){const m0=maInfo(it.ma),was=m0.done&&m0.short>0;const v=e.target.value.trim();it.tt=v===''?null:Math.max(0,parseInt(v)||0);touchStart();setTimeout(()=>warnCoSo(it,was),0)}
   if(f=='hv')it.hv=Math.max(0,parseInt(e.target.value)||0);
   if(f=='note'){it.note=e.target.value;save();renderHead();return}
   refreshCard(it);
@@ -659,7 +671,8 @@ $('#vfFile').addEventListener('change',async e=>{
 const COLS=['Số TT','Mã kỹ thuật','Tên thuốc, nồng độ, hàm lượng','Đơn vị','Số kiểm soát','Nước sản xuất','Hạn dùng','Cơ số','Sổ sách','Thực tế','Hỏng/vỡ','Ghi chú'];
 const fmtDT=v=>{if(!v)return '… giờ …, ngày … tháng … năm …';const d=new Date(v);return `${pad(d.getHours())} giờ ${pad(d.getMinutes())}, ngày ${pad(d.getDate())} tháng ${pad(d.getMonth()+1)} năm ${d.getFullYear()}`};
 function tableRows(){const out=[];let g=null,n=0;for(const it of S.items){if(it.g!==g){g=it.g;n=0;out.push({g})}n++;
-  out.push({r:[n,it.ma,it.ten,it.dvt,it.lo,it.nuoc,it.hd,it.coso,it.ss,it.tt??'',+it.hv||(it.tt!=null?0:''),[it.added?'Lô phát hiện thêm':'',it.vf=='bad'?'Lô/HD trên lọ khác sổ sách'+(it.vfTxt?': '+it.vfTxt:''):'',it.note].filter(Boolean).join('; ')]})}return out}
+  const m=maInfo(it.ma),cs=m.first===it&&m.done&&m.coso>0&&m.short>0?`Thiếu cơ số ${m.short} (tổng thực tế ${m.tt}/${m.coso})`:'';
+  out.push({r:[n,it.ma,it.ten,it.dvt,it.lo,it.nuoc,it.hd,it.coso,it.ss,it.tt??'',+it.hv||(it.tt!=null?0:''),[it.added?'Lô phát hiện thêm':'',it.vf=='bad'?'Lô/HD trên lọ khác sổ sách'+(it.vfTxt?': '+it.vfTxt:''):'',it.note,cs].filter(Boolean).join('; ')]})}return out}
 function dpRows(){return DP_ITEMS.map((t,i)=>{const r=S.dp[i]||{};return [t,r.r=='d'?'X':'',r.r=='k'?'X':'',r.note||'']})}
 let DL=null;
 async function saveFile(filename,data){

@@ -29,6 +29,9 @@ function buildNotes(items){
     if(q>0)notes.get(rows[0]).push(`Có thêm ${lab} ngoài sổ sách: ${q}`);
   }
   for(const i of orig)delete i._used;
+  for(const [ma,rows] of byMa){const all=items.filter(i=>i.ma==ma);if(all.some(i=>i.tt==null))continue;
+    const coso=Math.max(0,...all.map(i=>+i.coso||0)),tt=all.reduce((a,i)=>a+(i.tt||0),0);
+    if(coso>0&&tt<coso)notes.get(rows[0]).push(`Thiếu cơ số ${coso-tt} (tổng thực tế ${tt}/${coso})`)}
   return notes;
 }
 async function fillCabinetPDF(bytes,S,DP_ITEMS){
