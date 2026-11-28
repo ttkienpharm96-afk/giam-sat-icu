@@ -218,6 +218,7 @@ dialog::backdrop{background:rgb(0 0 0/.45)}
       <div class="tools">
         <button class="btn" id="newRound">Bắt đầu đợt mới (giữ danh mục)</button>
       </div>
+      <p class="note">Phiên bản app: <b id="appVer">28/11/2026 – 09:35</b></p>
       <p class="note">Mỗi tủ lưu riêng trên trình duyệt của máy này sau mỗi thao tác. Nên tải biên bản Excel ngay khi kiểm xong.</p>
     </div>
     <div class="card">
@@ -229,7 +230,7 @@ dialog::backdrop{background:rgb(0 0 0/.45)}
   </section>
 </main>
 
-<div class="fab"><button class="btn pri" id="scanBtn">Chụp nhãn tìm lô</button></div>
+<div class="fab"><button class="btn" id="shotGo" type="button" style="background:var(--panel)">Chụp tủ</button><button class="btn pri" id="scanBtn">Chụp nhãn tìm lô</button></div>
 <input type="file" id="scanFile" accept="image/*" capture="environment" hidden>
 <input type="file" id="vfFile" accept="image/*" capture="environment" hidden>
 <input type="file" id="pdfOrig" accept=".pdf,application/pdf" hidden>
@@ -857,6 +858,7 @@ $('#shotFiles').addEventListener('change',e=>{for(const f of e.target.files)SHOT
 $('#shotThumbs').addEventListener('click',e=>{const b=e.target.closest('[data-rm]');if(!b)return;const s=SHOTS.find(x=>x.id==b.dataset.rm);if(s)URL.revokeObjectURL(s.url);SHOTS=SHOTS.filter(x=>x!==s);shRender()});
 $('#shotClear').addEventListener('click',()=>{SHOTS.forEach(s=>URL.revokeObjectURL(s.url));SHOTS=[];SHOT_RES=null;$('#shotRes').innerHTML='';$('#shotAIRes').innerHTML='';shRender()});
 $('#shotRun').addEventListener('click',shAnalyze);
+$('#shotGo').addEventListener('click',()=>document.querySelector('nav [data-tab=shot]').click());
 $('#shotAI').addEventListener('click',shAI);
 (async()=>{try{const s=await window.claude?.use?.('sample');if(!s)return;const lim=await s.limits().catch(()=>null);if(!lim||!lim.images)return;SAMPLE_FN=s;$('#shotAI').hidden=false;$('#shotAIHint').hidden=false}catch(e){}})();
 /* ---------- export ---------- */
